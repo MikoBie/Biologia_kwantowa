@@ -1,0 +1,373 @@
+---
+title: "Markov"
+author: "Mikolaj Biesaga"
+date: ""
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Tak jak pisałem w mailu. Najpierw zacząłem od najprostrzych rzeczy. Trochę, żeby podiagnozować te dane, tzn. co ewentualnie można zobaczyć w nich na pierwszy rzut oka. Poza tym niektóre z tych pierwszych funkcji potem mi się przydadzą.
+
+## 1. Wczytanie danych i wstępna obróbka
+
+Na razie wziąłem dwa ciągi, które pi razy drzwi składają się z 300 elementów. O tyle ma to znaczenie, że podejrzewam, że te funkcje mocno zwolnią na dłużyszych ciągach. Próbowałem na ciągu składającym się ze 100 tysięcy elementów i najszybsza z nich czyli dla historii 1 zwolniła 1000 razy.
+Z ważnych rzeczy to przyjąłem, że odstęp między 1 liczę w liczbie zer pomiędzy dwoma jednynkami, tzn. między 1,1 odstęp jest zero. W jakimś stopniu jest to oczywiste ale na wszelki wypadek zaznaczam.
+
+```{r, message=FALSE, warning=FALSE}
+load("~/Desktop/Biologia_kwantowa/Biologia_kwantowa.RData")
+library(readr)
+library(plyr)
+library(gtools)
+library(ggplot2)
+
+example_1 <- read_csv("~/Desktop/Psychologia kwantowa/Survey/los_chem_zera_3_3_10_57_34.csv")
+example_2 <- read_csv("~/Desktop/Psychologia kwantowa/Survey/los_chem_zera_3_1_14_17_18.csv")
+
+#tworznie ciągu odstępu między jedynkami
+example_1_rows_with_1 <- with(example_1,key==1)
+example_2_rows_with_1 <- with(example_2,key==1)
+breaks_example_1 <- example_1[example_1_rows_with_1,]
+breaks_example_2 <- example_2[example_2_rows_with_1,]
+breaks_example_1$gap <- c(NA,(breaks_example_1[2:nrow(breaks_example_1),1]-breaks_example_1[1:nrow(breaks_example_1)-1,1])$id)-1
+breaks_example_2$gap <- c(NA,(breaks_example_2[2:nrow(breaks_example_2),1]-breaks_example_2[1:nrow(breaks_example_2)-1,1])$id)-1
+#przydatne do wykresów bo bez pierwszego wiersza, w którym w normalnym zbiorze jest NA bo nie wiadomo kiedy było ostatnia 1.
+breaks_example_1_chart <- breaks_example_1[-1,]
+breaks_example_2_chart <- breaks_example_2[-1,]
+```
+
+## 2. Wstępna diagnostyka (głównie wykresy)
+
+Poniżej znadują się wykresy, które pokazują jak się zmieniają długości odstępów w obu ciągach. Czerwona linia to mediana (wydała mi się ciekawsza niż średnia), a niebieskie to odchyelnia standardow. Ostatni wykres to CrossCorralation pierwszego ciągu z drugim +/- lag. Moim zdaniem przynajmniej na tych przykładach nic specjalnie ciekawego nie widac. Poza tym, że w danych z neuronów spodziewam się, że jednak odstępy będą większe.
+
+```{r}
+par(las=1)
+#ustalenie długości osi x, żeby miały tę samą długość
+x1 <- c(1:dim(breaks_example_1)[1])
+x2 <- c(1:dim(breaks_example_2)[1])
+
+if(length(x1)>length(x2)){
+  x <- x1
+}else{
+  x <- x2
+}
+#mnożę razy 20 tylko dlatego, ze inaczej jest nieczytelne przy tak długiej osi x.
+#nie ma legendy bo ciężko zrobic taką, która nie zasłoni całego wyrkesu
+y1 <- c(0:max(breaks_example_1_chart$gap))*20
+plot(x,type="n",xlab="",ylab="",axes=F)
+title(ylab=strwrap("Distance between spikes example 1",30))
+axis(2,pos=0,y1,labels=y1/20)
+axis(1,pos=-5,x,labels=F)
+lines(breaks_example_1_chart$gap*20)
+abline(h=median(breaks_example_1_chart$gap)*20,col="red",lty="dashed")
+abline(h=mean(breaks_example_1_chart$gap)*20-sd(breaks_example_1_chart$gap)*20,col="blue",lty="dashed")
+abline(h=mean(breaks_example_1_chart$gap)*20+sd(breaks_example_1_chart$gap)*20,col="blue",lty="dashed")
+#legend("topright", legend=c("Median", "Mean +/- SD"),lty="dashed", col=c("blue", "red"),cex=1,pt.lwd=0.25)
+
+#Drugi wykres, drugiego ciągu
+y2 <- c(0:max(breaks_example_2_chart$gap))*20
+plot(x,type="n",xlab="",ylab="",axes=F)
+title(ylab=strwrap("Distance between spikes example 2",30))
+axis(2,pos=0,y2,2,labels=y2/20)
+axis(1,pos=-5,x,labels=F)
+lines(breaks_example_2_chart$gap*20)
+abline(h=median(breaks_example_2_chart$gap)*20,col="red",lty="dashed")
+abline(h=mean(breaks_example_2_chart$gap)*20-sd(breaks_example_2_chart$gap)*20,col="blue",lty="dashed")
+abline(h=mean(breaks_example_2_chart$gap)*20+sd(breaks_example_2_chart$gap)*20,col="blue",lty="dashed")
+#wykres kross korelacji pomędzy example 1, a example 2. Zasadniczo lag odnosi się do drugiego ciągu.
+ccf(breaks_example_1_chart$gap,breaks_example_2_chart$gap,type = "correlation",ylab="",main="")
+title(main="CrossCorrelation example 1 and example 2",line=1)
+```
+
+Tutaj rozkłady prawdopodobieństwa. Na tego typu wykresie będzie moim zdaniem wstępne różnice zaobserwować.
+
+```{r}
+#rozkłady prawdopodobieństwa poszczególnych
+probability_distribution_example_1 <- as.vector(table(breaks_example_1_chart$gap)/length(breaks_example_1_chart$gap))
+probability_distribution_example_2 <- as.vector(table(breaks_example_2_chart$gap)/length(breaks_example_2_chart$gap))
+
+if(length(probability_distribution_example_1)>length(probability_distribution_example_2)){
+  difference <- length(probability_distribution_example_1)-length(probability_distribution_example_2)
+  probability_distribution_example_1 <- c(probability_distribution_example_1,rep(0,difference))
+}else{
+  difference <- length(probability_distribution_example_2)-length(probability_distribution_example_1)
+  probability_distribution_example_1 <- c(probability_distribution_example_1,rep(0,difference))
+}
+
+par(mfrow=c(2,1),las=1)
+plot(probability_distribution_example_1,type="n",xlab="",ylab="")
+title(ylab="Example 1. Probability of distances",xlab = "Distances between spikes")
+lines(probability_distribution_example_1)
+
+plot(probability_distribution_example_2,type="n",xlab="",ylab="")
+title(ylab="Example 2. Probability of distances",xlab = "Distances between spikes")
+lines(probability_distribution_example_2)
+```
+
+
+# Klasyczne prawdopodobieństwo
+
+Zanim tak naprawdę cokolwiek zacznę robić to postanowiłem sprawdzić na ile jestem w stanie przewidzieć te ciągi na podstawie klasycznego prawdopodobieństwa. Będzie to mój benchmark. Ogólnie widać, że w tym przypadku ten drugi ciąg jest mniej przewidywalny. Czerwona linia to średnia. Można śmiało założyć, że każda miara przewidywalności powyżej w pierwszym 0.2 (jest pięć różnych stanów) i 0.14 dla drugiego będzie lepsza (jest 7 różnych stanów). Oczywiście nie byłoby w ogóle sensu nic robić gdybyśmy celowali tylko powyżej 0.2. Jak się niżej okaże jest to dość łatwe kryterium do spełnienia.
+
+```{r}
+#funkcja, która za pomocą klasycznego prawdopodobieństwa liczy 1000 prawdopodobieństw trafienia w nasz zwykły ciąg
+#potrzebuje, tablei z gap oraz prawdopodobieństwo poszczególnych gapów.
+classic_approach <- function(breaks_example,probability_distribution){
+  wynik <- 0
+  for(j in c(1:1000)){
+    temp_wynik <- 0
+    temp_wynik <- sample(sort(unique(breaks_example$gap)),length(breaks_example$gap),replace=T,probability_distribution[probability_distribution>0])
+    wynik[j] <- (sum(breaks_example$gap==temp_wynik)/length(breaks_example))/100
+  }
+  return(wynik)
+}
+
+classic_approach_example_1 <- classic_approach(breaks_example_1_chart,probability_distribution_example_1)
+classic_approach_example_2 <- classic_approach(breaks_example_2_chart,probability_distribution_example_2)
+
+
+#czerwona linia to średnia, a czarna to oczywiście mediana. Dlatego lepiej brać medianę.
+par(mfrow=c(1,2),las=1)
+boxplot(classic_approach_example_1,xlab="",ylab="")
+title(xlab = "Example 1",ylab="Predictability using classic approach")
+abline(h=mean(classic_approach_example_1),col="red")
+boxplot(classic_approach_example_2,xlab="",ylab="")
+title(xlab = "Example 2",ylab="Predictability using classic approach")
+abline(h=mean(classic_approach_example_2),col="red")
+
+```
+
+## 3. Pierwsze podejście do ukrytych ciągów Markova
+
+# Funkcje
+
+Ta funkcja przygotowuje indeksy. Zasadniczo chodzi o to, żeby podzielić ciąg odstępów na odcinki składające się, gdy historia ma być np. 1, z dwóch elementów. Odpowiednio dla historii n podział będzie na n-elementowych ciągów. Tzn. chodzi o to, żeby ciąg c(0,2,4,5,3,2), przy dwóch elementach na c(0,2,2,4,4,5,5,3,3,2)
+
+```{r}
+#funkcja, która przygtowuje wektor w taki sposób, że w zależności od długości historii
+# zamienia np. przy historii 1 wektor c(1,2,3) na c(1,2,2,3)
+#możliwe ulepszenie to oczywiście usunięcie for ale to jes i tak dość szybka funkcja.
+index_prep<- function(breaks_example_chart,history){
+  help_data_frame <- data.frame(1:length(breaks_example_chart$gap))
+  for (i in 1:history){
+    length <- c(1:length(breaks_example_chart$gap))
+    temp_data_frame <- (length+1) 
+    help_data_frame <- cbind(help_data_frame,temp_data_frame)
+    temp_vector <- as.vector(t(help_data_frame))
+    temp_markov_series <- breaks_example_chart$gap[temp_vector]
+    temp_markov_series <- as.vector(na.omit(temp_markov_series))
+    return(temp_markov_series)
+  }
+}
+```
+
+Funkcja matka wszystkich funkcji. Zasadniczo bierze ciąg przetworzony przez poprzednią funckję i liczy prawdopodbieństwo trafienia w ciąg odległości. Dokładnie rzecz ujmując dla historii 1 i ciągu c(1,0,0,1,2,2,3,3,5,5), tworzy najpierw tak zwaną macierz transfomracji, w której są zapisane wszystkie możliwe dwu elementowe kombinacje elementów ciągu. W tym wypadku taka macierz ma 16 wierszy bo jest 2^4 kombinacji. Następnie losuje pierwszy element przewidywanego ciągu z rozkładu opartego na klasycznym prawdopodobieństwie. Mając pierwszy wyraz porównuje Go do macierzy transformacji i sprawdza jaki jest najczęściej występujący po nim wyraz, tzn. jeśli wyrazem pierwszym w oryginalnym ciągu była 1 to sprawdza co jaki jest najbardziej prawdopodobny wyraz następny. Zasadniczo jeździ tak w kółko, aż dotrze do końca. Jeśli wystąpienia są takie same to po prostu losuje między dwoma albo większą ilością wyrazów. Wynik to po prostu porównanie stworzonego ciągu z oryginalnym ciągiem.
+
+Główne zidentyfikowane problemy to losowość wyboru powtarzających się wyborów oraz pętla for, która powoduje, że to trochę trwa, tzn. do historii 5 jest całkiem znośnie bo analiza tych ciągów to koło sekundy. Maksymalnie 5 minut trwa powtórzenie 1000 razy. Przy historii 5 powtórzenie 1000 razy trwa koło 20 minut.
+
+```{r}
+#funkcja do liczenia Markova. Pobiera ciąg i historię.
+#Ciąg musi być w postaci np. dla historii 1 c(1,2,2,3).
+#Funkcja przeskakuje po prostu co ileś tam wyrazów
+#Niestety for nie da się pozbyć.
+#Do połamania sobie głowy to jeszcze trzeba sie zastanowić na długość ciągu przy porównaniu jest dobra. W sumie jest dużo rzeczy nad którymi warto się zastanowić.
+markov <- function(original_markov_series=breaks_example_1_chart,temp_markov_series=index_prep(breaks_example_1_chart,1),history=1){
+  compare <- function(table,vector){
+    (wynik <- t(t(table)==vector))
+    (wynik <- rowSums(wynik))
+    wynik <- wynik>(length(vector)-1)
+    return(wynik)
+  }
+  (number_of_states <- unique(original_markov_series$gap))
+  (transition_matrix <- as.data.frame(cbind(permutations(n=length(number_of_states),r=history+1,v=number_of_states,repeats.allowed=T),prob=0,n=1)))
+  ciag <- 0
+  ciag[c(1:history)] <- sample(sort(number_of_states),history,replace=T,as.vector(table(original_markov_series$gap)/length(original_markov_series$gap)))
+  for (i in (history+1):length(original_markov_series$gap)){
+    (test_for_equality <- transition_matrix[compare(transition_matrix[,c(1:history)],temp_markov_series[(i-history):(i-1)]),])
+    max_row <- test_for_equality$n==max(test_for_equality$n)
+    if ((sum(max_row)>1) && (i!=length(temp_markov_series))){
+      max_row <- test_for_equality$n==max(test_for_equality$n)
+      ciag[i] <- sample(test_for_equality[max_row,history+1],1)
+      add_row <- compare(transition_matrix[,c(1:(history+1))],original_markov_series$gap[(i-history):i])
+      transition_matrix$n[add_row] <- transition_matrix[add_row,history+3]+1
+    }else{
+      max_row <- which.max(test_for_equality$n)
+      ciag[i] <- test_for_equality[max_row,history+1]
+      if(i!=length(temp_markov_series)){
+        add_row <- compare(transition_matrix[,c(1:(history+1))],original_markov_series$gap[(i-history):i])
+        transition_matrix$n[add_row] <- transition_matrix$n[add_row]+1
+      }
+    }
+    i <- i+history
+  }
+  wynik <- sum(ciag[1:(length(ciag))]==original_markov_series$gap[1:length(original_markov_series$gap)])/(length(ciag))
+  return(wynik)
+}
+```
+
+# Historia 1
+
+Czerwona linia to średnia, a czarna to mediana
+
+```{r}
+# system.time(markov(breaks_example_1_chart,index_prep(breaks_example_1_chart,1),1))
+# system.time(markov(breaks_example_2_chart,index_prep(breaks_example_2_chart,1),1))
+# 
+# estimation_markov_1_example_1<- 0
+# system.time(for (i in 1:1000){estimation_markov_1_example_1[i] <- markov(breaks_example_1_chart,index_prep(breaks_example_1_chart,1),1)})
+# estimation_markov_1_example_2<- 0
+# system.time(for (i in 1:1000){estimation_markov_1_example_2[i] <- markov(breaks_example_2_chart,index_prep(breaks_example_2_chart,1),1)})
+
+# estimation_matrix <- data.frame(Example_1=estimation_markov_1_example_1,Example_2=estimation_markov_1_example_2,Markov=1)
+
+#czerwona linia to średnia, a czarna to oczywiście mediana. Dlatego lepiej brać medianę.
+par(mfrow=c(1,2),las=1)
+boxplot(estimation_markov_1_example_1)
+title(xlab = "Example 1",ylab="Predictability using History 1")
+abline(h=mean(estimation_markov_1_example_1),col="red")
+boxplot(estimation_markov_1_example_2)
+title(xlab = "Example 2",ylab="Predictability using History 1")
+abline(h=mean(estimation_markov_1_example_2),col="red")
+
+
+
+```
+
+# Historia 2
+
+Czerwona linia to średnia, a czarna to mediana
+
+```{r}
+# system.time(markov(breaks_example_1_chart,index_prep(breaks_example_1_chart,2),2))
+# system.time(markov(breaks_example_2_chart,index_prep(breaks_example_2_chart,2),2))
+# 
+# estimation_markov_2_example_1<- 0
+# system.time(for (i in 1:1000){estimation_markov_2_example_1[i] <- markov(breaks_example_1_chart,index_prep(breaks_example_1_chart,2),2)} )
+# estimation_markov_2_example_2<- 0
+# system.time(for (i in 1:1000){estimation_markov_2_example_2[i] <- markov(breaks_example_2_chart,index_prep(breaks_example_2_chart,2),2)} )
+# 
+# estimation_matrix <- rbind(estimation_matrix,data.frame(Example_1=estimation_markov_2_example_1,Example_2=estimation_markov_2_example_2,Markov=2))
+# estimation_matrix
+
+#czerwona linia to średnia, a czarna to oczywiście mediana. Dlatego lepiej brać medianę.
+par(mfrow=c(1,2),las=1)
+boxplot(estimation_markov_2_example_1)
+title(xlab = "Example 1",ylab="Predictability using History 1")
+abline(h=mean(estimation_markov_2_example_1),col="red")
+boxplot(estimation_markov_2_example_2)
+title(xlab = "Example 2",ylab="Predictability using History 1")
+abline(h=mean(estimation_markov_2_example_2),col="red")
+
+```
+
+# Historia 3
+
+Czerwona linia to średnia, a czarna to mediana
+
+```{r}
+# system.time(markov(breaks_example_1_chart,index_prep(breaks_example_1_chart,3),3))
+# system.time(markov(breaks_example_2_chart,index_prep(breaks_example_2_chart,3),3))
+# 
+# estimation_markov_3_example_1<- 0
+# system.time(for (i in 1:1000){estimation_markov_3_example_1[i] <- markov(breaks_example_1_chart,index_prep(breaks_example_1_chart,3),3)} )
+# estimation_markov_3_example_2<- 0
+# system.time(for (i in 1:1000){estimation_markov_3_example_2[i] <- markov(breaks_example_2_chart,index_prep(breaks_example_2_chart,3),3)} )
+# 
+# estimation_matrix <- rbind(estimation_matrix,data.frame(Example_1=estimation_markov_3_example_1,Example_2=estimation_markov_3_example_2,Markov=3))
+# estimation_matrix
+
+#czerwona linia to średnia, a czarna to oczywiście mediana. Dlatego lepiej brać medianę.
+par(mfrow=c(1,2),las=1)
+boxplot(estimation_markov_3_example_1)
+title(xlab = "Example 1",ylab="Predictability using History 1")
+abline(h=mean(estimation_markov_3_example_1),col="red")
+boxplot(estimation_markov_3_example_2)
+title(xlab = "Example 2",ylab="Predictability using History 1")
+abline(h=mean(estimation_markov_3_example_2),col="red")
+
+```
+
+# Historia 4
+
+Czerwona linia to średnia, a czarna to mediana
+
+```{r}
+# system.time(markov(breaks_example_1_chart,index_prep(breaks_example_1_chart,4),4))
+# system.time(markov(breaks_example_2_chart,index_prep(breaks_example_2_chart,4),4))
+# 
+#  estimation_markov_4_example_1<- 0
+#  system.time(for (i in 1:1000){estimation_markov_4_example_1[i] <- markov(breaks_example_1_chart,index_prep(breaks_example_1_chart,1),4)} )
+#  estimation_markov_4_example_2<- 0
+#  system.time(for (i in 1:1000){estimation_markov_4_example_2[i] <- markov(breaks_example_2_chart,index_prep(breaks_example_2_chart,1),4)} )
+# 
+#  estimation_matrix <- rbind(estimation_matrix,data.frame(Example_1=estimation_markov_4_example_1,Example_2=estimation_markov_4_example_2,Markov=4))
+#  estimation_matrix
+# #czerwona linia to średnia, a czarna to oczywiście mediana. Dlatego lepiej brać medianę.
+ par(mfrow=c(1,2),las=1)
+ boxplot(estimation_markov_4_example_1)
+ title(xlab = "Example 1",ylab="Predictability using History 1")
+ abline(h=mean(estimation_markov_4_example_1),col="red")
+ boxplot(estimation_markov_4_example_2)
+ title(xlab = "Example 2",ylab="Predictability using History 1")
+ abline(h=mean(estimation_markov_4_example_2),col="red")
+
+```
+
+# Historia 5
+
+Czerwona linia to średnia, a czarna to mediana
+
+```{r}
+# system.time(markov(breaks_example_1_chart,index_prep(breaks_example_1_chart,5),5))
+# system.time(markov(breaks_example_2_chart,index_prep(breaks_example_2_chart,5),5))
+# 
+# estimation_markov_5_example_1<- 0
+# system.time(for (i in 1:1000){estimation_markov_5_example_1[i] <- (markov(breaks_example_1_chart,index_prep(breaks_example_1_chart,1),5))} )
+# estimation_markov_5_example_2<- 0
+# system.time(for (i in 1:1000){estimation_markov_5_example_2[i] <- (markov(breaks_example_2_chart,index_prep(breaks_example_2_chart,1),5))} )
+
+# estimation_matrix <- rbind(estimation_matrix,data.frame(Example_1=estimation_markov_5_example_1,Example_2=estimation_markov_5_example_2,Markov=5))
+# estimation_matrix
+#czerwona linia to średnia, a czarna to oczywiście mediana.
+par(mfrow=c(1,2),las=1)
+boxplot(estimation_markov_5_example_1)
+title(xlab = "Example 1",ylab="Predictability using History 1")
+abline(h=mean(estimation_markov_5_example_1),col="red")
+boxplot(estimation_markov_5_example_2)
+title(xlab = "Example 2",ylab="Predictability using History 1")
+abline(h=mean(estimation_markov_5_example_2),col="red")
+```
+
+# Symulacja
+
+Sprawdzenie jak poradzi sobie ta funkcja z ciągiem składającym się z miliona elementów, które przyjmują wartości od 0 do 6
+
+```{r}
+# sym_markov_series <- sample(c(0,1,2,3,4,5,6),size=100000,replace = T)
+# sym_example <- data.frame(Id=1:100000,gap=sym_markov_series)
+# system.time(markov(sym_example,index_prep(sym_example,1),1))
+```
+
+
+# Podsumowanie
+
+Zasadniczo trend jest spadkowy jeśli chodzi o historię. Można by tak pewnie w nieskończoność ale to za długo zajmie czasu. Ogólnie to była bardzo głupia funkcja, bo stała w miejscu i brała pod uwagę tylko jedną długość historii. Następna będzie brać pod uwagę różne dłgości historii i dopasowywać tę, która będzie najlepsza, żeby zmaksymalizować prawdopoodbieństwo.
+
+```{r}
+table_mean_example_1 <- with(estimation_matrix,aggregate(Example_1,by=list(Markov),mean))
+ggplot(data=estimation_matrix,aes(y=Example_1,x=as.factor(Markov)))+geom_boxplot()+geom_line(data=table_mean_example_1,aes(x=(Group.1),y=x),col="red")+geom_point(data=table_mean_example_1,aes(x=(Group.1),y=x),col="red")+theme_classic()+scale_y_continuous("Example 1")+scale_x_discrete("Length of history on which prediction are made")
+table_mean_example_2 <- with(estimation_matrix,aggregate(Example_2,by=list(Markov),mean))
+ggplot(data=estimation_matrix,aes(y=Example_2,x=as.factor(Markov)))+geom_boxplot()+geom_line(data=table_mean_example_2,aes(x=(Group.1),y=x),col="red")+geom_point(data=table_mean_example_2,aes(x=(Group.1),y=x),col="red")+theme_classic()+scale_y_continuous("Example 2")+scale_x_discrete("Length of history on which prediction are made")
+```
+
+## 4. Drugie podejście do ukrytych ciągów Markova.
+
+# Funkcje
+
+Ogólnie na razie będę używał trochę zmienionej matki wszystkich funkcji w stosunku do poprzedniego przypadku. Główna wada to oczywiście czas ale na razie nie wymyśliłem do końca jak to rozwiązać.
+
+## 5. Trzecie podejście do ukrytych ciągów Markova.
+
+Jeszcze nie zakodowane funkcje kroczące, czyli takie, które w oknie czasowym określają tworzą macierz transformacji dzięki czemu, jak się zmienia ciąg, to wtedy nie są zależne od początkowej części ciągu. U ludzi to miało rację bytu nie wiem jak ze strzałami neuronów.

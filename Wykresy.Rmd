@@ -1,0 +1,60 @@
+---
+title: "Mrkov_2"
+author: "Mikolaj Biesaga"
+date: "7 08 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+load("~/Desktop/Biologia_kwantowa/Biologia_kwantowa.RData")
+```
+
+
+```{r}
+#mnożę razy 20 tylko dlatego, ze inaczej jest nieczytelne przy tak długiej osi x.
+#nie ma legendy bo ciężko zrobic taką, która nie zasłoni całego wyrkesu
+y1 <- c(0:max(breaks_example_1_chart$gap))*20
+plot(x,type="n",xlab="",ylab="",axes=F)
+title(ylab=strwrap("Distance between spikes example 1",30))
+axis(2,pos=0,y1,labels=y1/20)
+axis(1,pos=-5,x,labels=F)
+lines(breaks_example_1_chart$gap*20)
+abline(h=median(breaks_example_1_chart$gap)*20,col="red",lty="dashed")
+abline(h=mean(breaks_example_1_chart$gap)*20-sd(breaks_example_1_chart$gap)*20,col="blue",lty="dashed")
+abline(h=mean(breaks_example_1_chart$gap)*20+sd(breaks_example_1_chart$gap)*20,col="blue",lty="dashed")
+#legend("topright", legend=c("Median", "Mean +/- SD"),lty="dashed", col=c("blue", "red"),cex=1,pt.lwd=0.25)
+
+#Drugi wykres, drugiego ciągu
+y2 <- c(0:max(breaks_example_2_chart$gap))*20
+plot(x,type="n",xlab="",ylab="",axes=F)
+title(ylab=strwrap("Distance between spikes example 2",30))
+axis(2,pos=0,y2,2,labels=y2/20)
+axis(1,pos=-5,x,labels=F)
+lines(breaks_example_2_chart$gap*20)
+abline(h=median(breaks_example_2_chart$gap)*20,col="red",lty="dashed")
+abline(h=mean(breaks_example_2_chart$gap)*20-sd(breaks_example_2_chart$gap)*20,col="blue",lty="dashed")
+abline(h=mean(breaks_example_2_chart$gap)*20+sd(breaks_example_2_chart$gap)*20,col="blue",lty="dashed")
+#wykres kross korelacji pomędzy example 1, a example 2. Zasadniczo lag odnosi się do drugiego ciągu.
+ccf(breaks_example_1_chart$gap,breaks_example_2_chart$gap,type = "correlation",ylab="",main="")
+title(main="CrossCorrelation example 1 and example 2",line=1)
+```
+
+
+
+
+```{r}
+par(mfrow=c(1,2),las=1)
+boxplot(estimation_markov_1_example_1)
+title(xlab = "Example 1",ylab="Predictability using History 1")
+abline(h=mean(estimation_markov_1_example_1),col="red")
+boxplot(estimation_markov_1_example_2)
+title(xlab = "Example 2",ylab="Predictability using History 1")
+abline(h=mean(estimation_markov_1_example_2),col="red")
+
+```
+
