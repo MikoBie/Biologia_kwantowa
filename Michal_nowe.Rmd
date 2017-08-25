@@ -1,0 +1,120 @@
+---
+title: "Markov_2"
+author: "Mikolaj Biesaga"
+output: html_document
+---
+
+```{r echo = FALSE}
+library(plyr)
+library(ggplot2)
+library(gtools)
+
+setwd("~/Desktop/Biologia_kwantowa")
+vector_of_files<-list.files("~/Desktop/Biologia_kwantowa",pattern = ".dat$")
+
+#with heteregonity
+with_heteregonity <- read.delim(paste0(vector_of_files[1]),header = F, sep = '\t')
+#without heteregonity
+without_heteregonity <- read.delim(paste0(vector_of_files[2]),header = F, sep = '\t')
+```
+
+# Krok pierwszy - policzenie odstępów
+
+Na samym początku oczywiście zacząłem od policzenia odstępów pomiędzy strzałami neuronów. Uznałem, że nie ma znaczenia liczba zer bo to jest funkcja czasu. Poza tym usunąłem też różnicę między pierwszym czasem i początkiem pomiaru bo nie ma ona żadnego znaczenia. Poniższe wykresy prezentują odstępy pomiędzy strzałami neuronów. Ostatni wykres to kross korelacja (niebieskie linie to oczywiście odchylenia, a czerwona to mediana).
+
+```{r echo = FALSE}
+#przekształcanie danych
+with_heteregonity$gap <- c(NA,c(with_heteregonity$V1[2:length(with_heteregonity$V1)])-c(with_heteregonity$V1[1:(length(with_heteregonity$V1)-1)]))
+without_heteregonity$gap <- c(NA,c(without_heteregonity$V1[2:length(without_heteregonity$V1)])-c(without_heteregonity$V1[1:(length(without_heteregonity$V1)-1)]))
+
+with_heteregonity_chart <- with_heteregonity[-1,]
+without_heteregonity_chart <- without_heteregonity[-1,]
+
+#wykresy
+par(mfrow=c(3,1))
+
+plot(with_heteregonity_chart,type="n",xlab="",ylab="")
+lines(with_heteregonity_chart$V1,with_heteregonity_chart$gap)
+abline(h=median(with_heteregonity_chart$gap),col="red",lty="dashed")
+abline(h=mean(with_heteregonity_chart$gap)-sd(with_heteregonity_chart$gap),col="blue",lty="dashed")
+abline(h=mean(with_heteregonity_chart$gap)+sd(with_heteregonity_chart$gap),col="blue",lty="dashed")
+
+plot(without_heteregonity_chart,type="n",xlab="",ylab="")
+lines(without_heteregonity_chart$V1,without_heteregonity_chart$gap)
+abline(h=median(without_heteregonity_chart$gap),col="red",lty="dashed")
+abline(h=mean(without_heteregonity_chart$gap)-sd(without_heteregonity_chart$gap),col="blue",lty="dashed")
+abline(h=mean(without_heteregonity_chart$gap)+sd(without_heteregonity_chart$gap),col="blue",lty="dashed")
+
+ccf(with_heteregonity_chart$gap,without_heteregonity_chart$gap,type = "correlation",main="CrossCorelation")
+
+```
+
+Na pierwszy rzut oka widać, że czasy pomiędzy strzałami się różnią, tzn. zakres jest różny, choć kross kolrelacja nie wychodzi. Przyglądając się wynikom uświadomiłem sobie, że jest jedna rzecz, na którą zwracałeś mi uwagę ale ja trochę ją zlekceważyłem. Tzn. te odstępy między kolejnymi strzałami nie są regularne, więc trzeba je zbinować bo inaczej pusczanie tego algorytmu nie ma za dużo sensu (co dla mnie było ciekawe dla Ciebie pewnie dość oczywiste bo to w końcu dane symulacyjne, to w przypadku with heteregonity powtarzają się te odstępy, a w without heteregonity nie). Poniżej są odstępy, które się powtarzają dla with heteregonity (w pierwszym wierszu jest dostęp, w drugim ile razy się powtarza, w tym wypadku zawsze jest to dwójka).
+```{r echo = FALSE}
+#w w with heteregonity jest 
+(table(with_heteregonity$gap)[(table(with_heteregonity_chart$gap)>1)])
+#(table(without_heteregonity$gap)[(table(without_heteregonity_chart$gap)>1)])
+```
+# Krok drugi - zbinowanie odstępów
+Na razie zacząłem od tego, że zbinowałem je po 10 sekund (tzn. o ile czas mierzony był w sekundach, jeśli nie to po 10 jednostek czasu). Nie był to na pewno najgenialniejszy z moich pomysłów bo powstało strasznie dużo binów, co potwornie wydłużyło liczenie, ale na razie nie o tym. Poniżej poglądowe wykresy, histogramy (na niebiesko with heteregonity, na czerwono without) i boxploty. Zasadniczo zarówno na histogramach jak i boxplotach różnice w odstępach pomiedzy with heteregonity i without heteregonity są dość dobrze widoczne.
+```{r echo = FALSE}
+with_heteregonity_chart$gap_bin <- as.numeric(as.character(cut(with_heteregonity_chart$gap,c(0, seq(10, 120, by = 10)),c(1:12))))
+without_heteregonity_chart$gap_bin <- as.numeric(as.character(cut(without_heteregonity_chart$gap,c(0, seq(10, 200, by = 10)),c(1:20))))
+
+ggplot()+geom_histogram(data=with_heteregonity_chart,aes(gap),binwidth = 10,fill="blue",alpha=0.5)+geom_histogram(data=without_heteregonity_chart,aes(gap),binwidth = 10,fill="red",alpha=0.5)+theme_classic()+scale_x_continuous("Gap")+scale_y_continuous("Frequency")
+
+dane <- rbind(cbind(with_heteregonity_chart,heterogenity=1),cbind(without_heteregonity_chart,heterogenity=0))
+ggplot(dane)+geom_boxplot(aes(y=gap,x=factor(heterogenity)))+theme_classic()+scale_x_discrete("",labels=c("Without Heteregonity","With Heterogenity"))
+```
+
+W zasadzie niezależnie od tego jak policzymy różnicę między tymi dwoma grupami, czy policzymy różnicę między średnimi czy też pomiędzy rangami to i tak wyjdzie istotna.
+```{r echo = FALSE}
+kruskal.test(dane$gap~factor(dane$heterogenity))
+t.test(dane$gap~factor(dane$heterogenity))
+
+```
+# Krok trzeci - policzenie historii
+Na razie policzyłem to dla historii od 1 do 5 używając tego algorytmu o którym rozmawialiśmy ostatnio. Tak jak pisałem w mailu okazał się on daleki od idealnego co z resztą tutaj dobrze widać bo zgodność przewidywanego ciągu z orginalnym jest dość niska (pierwszy wynik to with heteregonity drugi to without heteregonity), tzn. prawie 3 razy wyższ w obu przypadkach niż losowa ale i tak bardzo niska.
+
+```{r echo=FALSE}
+load('Michal_nowe.RData')
+#with hteregonity
+sum(predicted_ciag_with==with_heteregonity_chart$gap_bin[1:length(predicted_ciag_with)])/length(predicted_ciag_with)
+#without heteregonity, tutaj to jest bardzo niskie to prawdopodobieństwo, choć jak się weźmie pod uwagę, że losowe by było około 6 procent to i tak jest prawie 3 razy wyższe. Jednak to dalej jest mało.
+sum(predicted_ciag_without==without_heteregonity_chart$gap_bin[1:length(predicted_ciag_without)])/length(predicted_ciag_without)
+```
+Powody tego są dwa. Jeden jest taki, że przy wielu binach ciągi powinny być dłuższe, tzn. tak jak w tym drugim przypadku (without heteregonity) mamy ciąg 80 elementowy, i 15 różnych odległości, przez co ten algorytm nie zdąża niczego się nauczyć zanim ciąg się skończy. Oczywiście w tym wypadku zwiększenie długości ciągów jest mniej lub bardziej niemożliwe więc trzeba zwiększyć biny, co oczywiście wiąże się ze stratą informacji. Im mniej binów tym lepiej, tzn. popróbuje z różnymi ilościami binów wtedy też szybkość powinna się zwiększyć bo na razie o ile liczenie tego pierwszego (with heteregonity) zajęła około 20 minut to tego drugiego (without heteregonity) półtorej godziny. Drugi powód jest taki, że ten algorytm dalej nie zachowuje się dokładnie tak jak bym chciał. Już mi się wydawało, że wszystko jest dobrze ale na tych nowych danych dalej to nie wygląda tak jak powinno. Wydaje mi się, że będę musiał napisać go na nowo, już nawet wiem jak ale to jednak trochę potrwa.
+
+Poniżej są podstawowe wykresy. Na osi y jest historia, a na osi x odstępy pomiędzy strzałami neuronów. Ten pierwszy wykres jest dłuższy bo odstępów było 140 w tym pliku with heteregonity, podczas gdy dla without heteregonity 80. Na pierwszym wykresie widać, że niewykorzystywana jest historia 4, a na drugim historia 5.
+```{r echo=FALSE}
+#porównanie rozkładów przewidzianych ciągów
+probability_distribution_history_with <- as.vector(table(which_history_with)/length(which_history_with))
+probability_distribution_history_without <- as.vector(table(which_history_without)/length(which_history_without))
+
+par(mfrow=c(3,1))
+
+plot(which_history_with,type="l",xlab="",ylab="")
+
+plot(which_history_without,type="l",xlab="",ylab="")
+
+ccf(which_history_with,which_history_without,type = "correlation",main="CrossCorelation")
+```
+
+Poniżej rozkłady prawdopodobieństwa historii na podstawie, której przewidywane były ciągi. Widać, że w obu przypadkach przewidywanie na podstawie historii jeden, czyli na podstawie poprzedniego wyrazu było naczjęściej wykorzystywane. Szczerze mówiąc spodziewałem się, że te wykresy będą dużo ciekawsze...
+
+```{r echo=FALSE}
+#probablity for with heteregonity
+data <- data.frame(ix=c(1,2,3,5),iy=as.numeric(probability_distribution_history_with))
+data[5,] <- c(4,0)
+ggplot(data)+geom_line((aes(x=data$ix,y=data$iy)))+theme_classic()+scale_y_continuous("Probability")+scale_x_continuous("History")+ggtitle("With Heteregonity")
+
+#probablity for without heteregonity
+data <- data.frame(ix=c(1,2,3,4,5),iy=c(as.numeric(probability_distribution_history_without),0))
+ggplot(data)+geom_line((aes(x=data$ix,y=data$iy)))+theme_classic()+scale_y_continuous("Probability")+scale_x_continuous("History")+ggtitle("Without Heteregonity")
+
+```
+
+# Podsumowanie
+Ogólnie w jakmiś stopniu zaskoczyły mnie te dane mimo że mnie uprzedzałeś. Wydawało mi się, że mój algorytm poradzi sobie z nimi bez problemu co jak widać okazało się dość złudnym założeniem. Myślę, że teraz najważniejsze jest zwiększenie prawdopodobieństwa przewidywania bo bez tego ani rusz. Ciężko coś powiedzieć na temat różnicy pomiędzy tymi dwoma ciągami (with heteregonity i without heteregonity) jeśli zgodność przewidywanego ciągu z oryginalnym jest na poziomi 15 %. Tak jak pisałem wyżej rozwiązania widzę dwa po pierwsze zwiększenie binów po drugie nowy algorytm. Mimo, że pierwsze wydaje się dość proste to jednak poczekałbym z jego implementacją, na nowy algorytm.
+
+
