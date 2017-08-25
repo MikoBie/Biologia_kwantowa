@@ -1,3 +1,7 @@
+library(plyr)
+library(ggplot2)
+library(gtools)
+
 setwd("~/Desktop/Biologia_kwantowa")
 vector_of_files<-list.files("~/Desktop/Biologia_kwantowa",pattern = ".dat$")
 
@@ -238,39 +242,39 @@ unique(with_heteregonity_chart$gap_bin)
 
 which_history <- 0
 predicted_ciag <- 0
-for (i in 1:(length(without_heteregonity$gap_bin)-1)){
+for (i in 1:(length(without_heteregonity_chart$gap_bin)-1)){
   if ((i==1) | (i==2)){
     opt_table <- data.frame(id=c(1:1),history=c(1:1))
     length_of_history <- ddply(opt_table,.(id),function(table){
-      temp_table <- markov_2(breaks_example_1_chart[1:i,],index_prep(breaks_example_1_chart[1:i,],table$history),table$history)
+      temp_table <- markov_2(without_heteregonity_chart[1:i,],index_prep(without_heteregonity_chart[1:i,],table$history),table$history)
       return(c(temp_table[,1],temp_table[,2]))
     })
   }
   if (i==3){
     opt_table <- data.frame(id=c(1:2),history=c(1:2))
     length_of_history <- ddply(opt_table,.(id),function(table){
-      temp_table <- markov_2(breaks_example_1_chart[1:i,],index_prep(breaks_example_1_chart[1:i,],table$history),table$history)
+      temp_table <- markov_2(without_heteregonity_chart[1:i,],index_prep(without_heteregonity_chart[1:i,],table$history),table$history)
       return(c(temp_table[,1],temp_table[,2]))
     })
   }
   if (i==4){
     opt_table <- data.frame(id=c(1:3),history=c(1:3))
     length_of_history <- ddply(opt_table,.(id),function(table){
-      temp_table <- markov_2(breaks_example_1_chart[1:i,],index_prep(breaks_example_1_chart[1:i,],table$history),table$history)
+      temp_table <- markov_2(without_heteregonity_chart[1:i,],index_prep(without_heteregonity_chart[1:i,],table$history),table$history)
       return(c(temp_table[,1],temp_table[,2]))
     })
   }
   if (i==5){
     opt_table <- data.frame(id=c(1:4),history=c(1:4))
     length_of_history <- ddply(opt_table,.(id),function(table){
-      temp_table <- markov_2(breaks_example_1_chart[1:i,],index_prep(breaks_example_1_chart[1:i,],table$history),table$history)
+      temp_table <- markov_2(without_heteregonity_chart[1:i,],index_prep(without_heteregonity_chart[1:i,],table$history),table$history)
       return(c(temp_table[,1],temp_table[,2]))
     })
   }
   if (i>5){
     opt_table <- data.frame(id=c(1:5),history=c(1:5))
     length_of_history <- ddply(opt_table,.(id),function(table){
-      temp_table <- markov_2(breaks_example_1_chart[1:i,],index_prep(breaks_example_1_chart[1:i,],table$history),table$history)
+      temp_table <- markov_2(without_heteregonity_chart[1:i,],index_prep(without_heteregonity_chart[1:i,],table$history),table$history)
       return(c(temp_table[,1],temp_table[,2]))
     })
   }
