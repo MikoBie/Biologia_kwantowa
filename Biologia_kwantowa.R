@@ -1,4 +1,3 @@
-kupa
 library(readr)
 library(plyr)
 library(markovchain)
