@@ -119,9 +119,15 @@ markov <- function(original_markov_series=breaks_example_1_chart,temp_markov_ser
     }
     i <- i+history
   }
-  wynik <- sum(ciag[1:(length(ciag))]==original_markov_series$gap_bin[1:length(original_markov_series$gap_bin)])/(length(ciag))
+  print(transition_matrix)
+  wynik <- ciag
+  #wynik <- sum(ciag[1:(length(ciag))]==original_markov_series$gap_bin[1:length(original_markov_series$gap_bin)])/(length(ciag))
   return(wynik)
 }
+
+
+colnames(example_1)[2] <- "gap_bin" 
+markov(example_1,index_prep(example_1,8),8)
 
 #historia=1
 (markov(with_heteregonity_chart,index_prep(with_heteregonity_chart,1),1))

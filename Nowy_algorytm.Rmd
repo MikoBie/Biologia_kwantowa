@@ -1,0 +1,504 @@
+---
+title: "Markov nowy algorytm"
+author: "Mikolaj Biesaga"
+date: ""
+output: html_document
+---
+<style>
+body {
+text-align: justify}
+</style>
+
+```{r echo = FALSE, include = FALSE}
+library(gtools)
+library(plyr)
+library(knitr)
+library(readr)
+library(kableExtra)
+
+#przykłady z ludźmi
+
+example_1 <- read_csv("~/Desktop/Psychologia kwantowa/Survey/los_chem_zera_3_3_10_57_34.csv")
+example_2 <- read_csv("~/Desktop/Psychologia kwantowa/Survey/los_chem_zera_3_1_14_17_18.csv")
+
+#przygotowanie dla nowego algorytmu
+example_1_new <- example_1$key
+example_2_new <- example_2$key
+
+#przygotowanie dla starego algorytmu
+example_1_old <- example_1
+colnames(example_1_old)[2] <- "gap_bin"
+example_2_old <- example_2
+colnames(example_2_old)[2] <- "gap_bin"
+
+
+#symulacje Michała
+
+setwd("~/Desktop/Biologia_kwantowa")
+vector_of_files<-list.files("~/Desktop/Biologia_kwantowa",pattern = ".dat$")
+
+#with heteregonity
+with_heteregonity <- read.delim(paste0(vector_of_files[1]),header = F, sep = '\t')
+#without heteregonity
+without_heteregonity <- read.delim(paste0(vector_of_files[2]),header = F, sep = '\t')
+
+# Mój pierwszy ruch to policzenie odstępów.
+
+with_heteregonity$gap <- c(NA,c(with_heteregonity$V1[2:length(with_heteregonity$V1)])-c(with_heteregonity$V1[1:(length(with_heteregonity$V1)-1)]))
+without_heteregonity$gap <- c(NA,c(without_heteregonity$V1[2:length(without_heteregonity$V1)])-c(without_heteregonity$V1[1:(length(without_heteregonity$V1)-1)]))
+
+# Pierwszy czas to NA bo czas pierwszego spike'a jest od włączenia nagrywania, dlatego bez żalu go usuwam
+
+with_heteregonity_chart <- with_heteregonity[-1,]
+without_heteregonity_chart <- without_heteregonity[-1,]
+
+#zbinowanie wyników
+
+with_heteregonity_chart$gap_bin <- as.numeric(as.character(cut(with_heteregonity_chart$gap,c(0, seq(10, 120, by = 10)),c(1:12))))
+without_heteregonity_chart$gap_bin <- as.numeric(as.character(cut(without_heteregonity_chart$gap,c(0, seq(10, 200, by = 10)),c(1:20))))
+
+#przygotowanie dla nowego algorytmu
+with_heteregonity_new <- with_heteregonity_chart$gap_bin
+without_heteregonity_new <- without_heteregonity_chart$gap_bin
+
+
+```
+## Stary algorytm
+
+```{r echo = FALSE, results="asis"}
+index_prep<- function(breaks_example_chart,history){
+  help_data_frame <- data.frame(1:length(breaks_example_chart$gap_bin))
+  for (i in 1:history){
+    length <- c(1:length(breaks_example_chart$gap_bin))
+    temp_data_frame <- (length+1) 
+    help_data_frame <- cbind(help_data_frame,temp_data_frame)
+    temp_vector <- as.vector(t(help_data_frame))
+    temp_markov_series <- breaks_example_chart$gap_bin[temp_vector]
+    temp_markov_series <- as.vector(na.omit(temp_markov_series))
+    return(temp_markov_series)
+  }
+}
+
+markov <- function(original_markov_series=breaks_example_1_chart,temp_markov_series=index_prep(breaks_example_1_chart,1),history=1){
+  compare <- function(table,vector){
+    (wynik <- t(t(table)==vector))
+    (wynik <- rowSums(wynik))
+    wynik <- wynik>(length(vector)-1)
+    return(wynik)
+  }
+  (number_of_states <- unique(original_markov_series$gap_bin))
+  (transition_matrix <- as.data.frame(cbind(permutations(n=length(number_of_states),r=history+1,v=number_of_states,repeats.allowed=T),prob=0,n=1)))
+  ciag <- 0
+  #nie wszystkie ale przynajmniej 2
+  ciag[c(1:history)] <- sample(sort(number_of_states),history,replace=T,as.vector(table(original_markov_series$gap_bin)/length(original_markov_series$gap_bin)))
+  for (i in (history+1):length(original_markov_series$gap_bin)){
+    (test_for_equality <- transition_matrix[compare(transition_matrix[,c(1:history)],temp_markov_series[(i-history):(i-1)]),])
+    max_row <- test_for_equality$n==max(test_for_equality$n)
+    if ((sum(max_row)>1) && (i!=length(temp_markov_series))){
+      max_row <- test_for_equality$n==max(test_for_equality$n)
+      ciag[i] <- sample(test_for_equality[max_row,history+1],1)
+      add_row <- compare(transition_matrix[,c(1:(history+1))],original_markov_series$gap_bin[(i-history):i])
+      transition_matrix$n[add_row] <- transition_matrix[add_row,history+3]+1
+    } 
+    if (sum(max_row)<2){
+      max_row <- which.max(test_for_equality$n)
+      ciag[i] <- test_for_equality[max_row,history+1]
+      if(i!=length(temp_markov_series)){
+        add_row <- compare(transition_matrix[,c(1:(history+1))],original_markov_series$gap_bin[(i-history):i])
+        transition_matrix$n[add_row] <- transition_matrix$n[add_row]+1
+      }
+    }
+    i <- i+history
+  }
+  
+  wynik <- transition_matrix
+  return(wynik)
+}
+
+tabela_1 <- (markov(with_heteregonity_chart,index_prep(with_heteregonity_chart,1),1))
+tabela_2 <- (markov(with_heteregonity_chart,index_prep(with_heteregonity_chart,2),2))
+```
+Zasadniczo mój początkowy pomysł był taki, żeby dla każdej historii stworzyć oddzielną macierz (przykładowe macierze w Tabeli 1. i 2.). Czyli jeśli chcę przewidzieć ciąg na podstawie historii jeden i dwa to wtedy muszę stworzyć dwie macierze, z których najpierw porównuje odpowiednio poprzedni wyraz ciągu lub dwa poprzednie wyrazy z pierwszą lub pierwszymi dwoma kolumnami poniższych tabeli. To znaczy dla ciągu c(2,2,3,2) do przewidzenia trzeciego wyrazu stworzyłbym dwie mniejsze tabele składające się każda z pierwszych 10 wierszy przedstawionych poniżej tabeli (pierwszych 10 bo dla Tabeli 1 pierwsze 10 wierszy ma w pierwszej kolumnie 2, a w Tabeli 2. pierwsze 10 wierszy w dwóch pierwszych kolumnach ma 2 i 2). Następnie w takich tabelach z 10 wierszami policzyłbym prawdopodobieństwo każdego wiersza i wybrał odpowiednio z kolumny V2 dla historii 1 i V3 dla historii 2 wyrazy z największym prawdopodobieństwem. Potem stworzyłbym małą tabelę z dwoma wierszami i trzema komunami, w pierwszej zapisana byłaby długość historii, w drugiej prawdopodobieństwo, a w trzeciej przewidywany wyraz dla odpowiednio historii jeden i dwa.
+```{r echo = FALSE, results="asis"}
+kable(tabela_1,format="html",caption="Tabela 1. Macierz dla historii jeden")%>%kable_styling(bootstrap_options="bordered",full_width=T,position="center")%>%scroll_box(height="500px")
+
+kable(tabela_2,format="html",caption="Tabela 2. Macierz dla historii dwa")%>%kable_styling(bootstrap_options="bordered",full_width=T,position="center")%>%scroll_box(height="500px")
+
+
+
+```
+
+
+  
+```{r echo=F}
+#Ta funkcja bierze jako argumenty ciąg oraz długość historii, a zwraca indeksy potrzebne do następnej funkcji. Tzn. bierze ciąg powiedzmy c(0,2,4,5) oraz historię 2 i zwraca ciąg indeksów c(1,2,3,2,3,4)
+index_prep<- function(breaks_example_chart,history){
+  help_data_frame <- data.frame(1:length(breaks_example_chart$gap_bin))
+  for (i in 1:history){
+    length <- c(1:length(breaks_example_chart$gap_bin))
+    temp_data_frame <- (length+1) 
+    help_data_frame <- cbind(help_data_frame,temp_data_frame)
+    temp_vector <- as.vector(t(help_data_frame))
+    temp_markov_series <- breaks_example_chart$gap_bin[temp_vector]
+    temp_markov_series <- as.vector(na.omit(temp_markov_series))
+    return(temp_markov_series)
+  }
+}
+
+#ta funkcja w swojej podstawowej wersji zwraca przewidywany ciąg. Jako argumenty bierze ciąg, wynik poprzedniej funkcji oraz długość historii.
+markov <- function(original_markov_series=breaks_example_1_chart,temp_markov_series=index_prep(breaks_example_1_chart,1),history=1){
+  #krótka ale bardzo ważna funkcja, która służy do porównywania wierszy tabeli z wektorem.
+  compare <- function(table,vector){
+    (wynik <- t(t(table)==vector))
+    (wynik <- rowSums(wynik))
+    wynik <- wynik>(length(vector)-1)
+    return(wynik)
+  }
+  #zapisanie wszystkich możliwych stanów, w naszym przypadku odległości pomiędzy spike'ami
+  (number_of_states <- unique(original_markov_series$gap_bin))
+  #stworzenie macierzy, w której zapisane są wszystkie możliwe stanów (w zależnośic od historii) oraz liczba wystąpień poszczególnych stnaów w ciągu. Ta macierz z każdym kolejnym krokiem się aktualizuje. Jest podstawą tabeli 1.
+  (transition_matrix <- as.data.frame(cbind(permutations(n=length(number_of_states),r=history+1,v=number_of_states,repeats.allowed=T),prob=0,n=1)))
+  #losowanie pierwszych elementów ciągu, nawet dla historii 1 trzeba przynajmniej pierwsze dwa wylosować bo nie ma danych, żeby je przewidzieć nawet jeśli ciąg składa się tylko z tych samych elementów.
+  ciag <- 0
+  ciag[c(1:history)] <- sample(sort(number_of_states),history,replace=T,as.vector(table(original_markov_series$gap_bin)/length(original_markov_series$gap_bin)))
+  for (i in (history+1):length(original_markov_series$gap_bin)){
+    #to jest moment, w którym w macierzy wszystkich możliwych stanów szukam takiego ciągu, który jest zgodny z analizowanym przeze mnie kawałkiem ciągu. Tzn. dla historii 1 i ciągu c(1,2,1,4) do przewidzenia trzeciego elementu biorę drugi element i sprawdzam co najczęściej po nim występowało. Widać, że nie było jeszcze takiego, więc dla ciągu c(1,2,1,4), z równym prawdopodobieństwem będzie to 1,2 lub 4.
+    (test_for_equality <- transition_matrix[compare(transition_matrix[,c(1:history)],temp_markov_series[(i-history):(i-1)]),])
+    #poniższy kod służy do uporania się z problemem, który pojawia sie gdy jest takie samo prawdopodobieństwo oraz dodaniem w odpowiednim miejscu jedynki do liczebności
+    max_row <- test_for_equality$n==max(test_for_equality$n)
+    if ((sum(max_row)>1) && (i!=length(temp_markov_series))){
+      max_row <- test_for_equality$n==max(test_for_equality$n)
+      ciag[i] <- sample(test_for_equality[max_row,history+1],1)
+      add_row <- compare(transition_matrix[,c(1:(history+1))],original_markov_series$gap_bin[(i-history):i])
+      transition_matrix$n[add_row] <- transition_matrix[add_row,history+3]+1
+    } 
+    if (sum(max_row)<2){
+      max_row <- which.max(test_for_equality$n)
+      ciag[i] <- test_for_equality[max_row,history+1]
+      if(i!=length(temp_markov_series)){
+        add_row <- compare(transition_matrix[,c(1:(history+1))],original_markov_series$gap_bin[(i-history):i])
+        transition_matrix$n[add_row] <- transition_matrix$n[add_row]+1
+      }
+    }
+    i <- i+history
+  }
+  wynik <- ciag
+  #wynik <- sum(ciag[1:(length(ciag))]==original_markov_series$gap_bin[1:length(original_markov_series$gap_bin)])/(length(ciag))
+  return(wynik)
+}
+```
+
+
+## Nowy algorytm
+
+Tworząc ten algorytm zmodyfikowałem pomysł tworzenia dla każdej historii macierzy. Dla wszystkich historii stworzyłem jedną macierz (Tabela 3.). Pierwsza część tej tabeli to wszystkie kombinacje elementów ciągu, a druga to zliczenie występowania ostatniego elementu.  W praktyce wygląda to tak, że gdy chcę przewidywać na podstawie historii jeden i dwa dla ciągu np. c(2,2,3,2) gdy chcę przewidzieć 4 wyraz w pierwszej kolejności dodaje 1 do kolumny 3 we wszystkich wierszach, które w pierwszej kolumnie mają 2. Następnie biorę wszystkie wiersze, które w pierwszej kolumnie mają 3 i liczę prawdopodobieństwo dla kolumn (tzn. dla kolumn z cyframi w nazwach) i wybieram tę, która ma najwyższe - to jest prawdopodobieństwo dla historii jeden. Żeby policzyć prawdopodobieństwo dla historii 2 w kolumnie 3 dodaję jedynkę tylko w tych wierszach, w których w pierwszych dwóch kolumnach są dwie dwójki. Potem oczywiście na podstawie prawdopodobieństwa wybieram najbardziej prawdopodobną kolumnę z wierszy zaczynających się od 2 i 3. Na samym końcu po prostu porównuje te prawdopodobieństwa ze sobą i wybieram wyraz, który jest najbardziej prawdopodobny oraz zapisuje historię na podstawie, której został wybrany.  
+
+```{r echo = FALSE}
+#ta funkcja bierze jako argument ciąg i zwraca przewidywany ciąg oraz historię, której przewidywała poszczególne elementy.
+Markov_new <- function(example){
+  #niestety historię w tej funkcji trzeba regulować ręcznie poprzez zmianę liczby poniżej oraz dodanie linijek kodu w pętli for. Na razie ustawiona jest historia 5 ale zmiana tego to jakieś 30 sekund roboty.
+  history <- 2
+  #ta sama krótka funkcja co w poprzednim algorytmie służąca do porównywania wierszy macierzy z wektorem.
+  compare <- function(table,vector){
+    (wynik <- t(t(table)==vector))
+    (wynik <- rowSums(wynik))
+    wynik <- wynik>(length(vector)-1)
+    return(wynik)
+  }
+  #stworzenie macierzy wszystkich stanów dla wszystkich historii. To jest zasadnicza różnica pomiędzy tym algorytmem i tym poprzednim. Ta macierz tworzona jest przez połączenie tak naprawdę dwóch macierzy. Z jednej strony macierzy kombinacji wszystkich stanów dla historii 5 (tylko dlatego, że tak ustawiona jest historia), a z drugiej strony kolumn z liczebnością przewidywanego wyrazu (Tabela 2 pokazuję tę macierz).
+  transition_matrix <- permutations(n=length(unique(example)),r=history,v=unique(example),repeats.allowed = T)
+  #nazwanie kolumn
+  colnames(transition_matrix) <- paste0("h",c(1:history))
+  temp_table <- data.frame(t(rep(0,length(unique(example)))))
+  colnames(temp_table) <- sort(unique(example))
+  #połączenie dwóch tabel
+  transition_matrix <- cbind(transition_matrix,temp_table)
+  #Zmienna, w której będzie zapisywana historia, za pomocą, której robione są przewidywania. Jej pierwsze dwa elementy to zera ponieważ pierwsze dwa elementy są przewidywane na podstawie zwykłego prawdopodobieństwa.
+  which_history <- c(0,0)
+  #zmienna, w której zapisywane są elementy ciągu. Pierwszy element jest po prostu losowany z równym prawdopodobieństwem. Dla dwóch elementów jest to 0.5. Drugi element jest po prostu przepisaniem pierwszego wyrazu oryginalnego ciągu bo na podstawie jednego wyrazu tylko takie przewidywanie można zrobić (w tym sensie trochę oszukuję z historią)
+  ciag <- sample(unique(example),1,replace=F)
+  ciag[2] <- example[1]
+  #to jest serce tej funkcji, tego algorytmu. Podzielone jest na odpowiednie historie. Dla każdej historii. Wydaje mi się, że w miarę jasno opisane jest działanie tego algorytmu powyżej.
+  for (i in 3:(length(example))){
+    #historia 1
+    transition_matrix[compare(transition_matrix[,1],example[i-2]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]] <- transition_matrix[compare(transition_matrix[,1],example[i-2]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]]+1
+    temp_table <- (t(apply(transition_matrix[compare(transition_matrix[,1],example[i-1]),c((history+1):(dim(transition_matrix)[2]))],2,sum)))
+    probability_matrix <- temp_table/sum(temp_table)
+    if (sum(temp_table)<1){
+      probability_matrix[1,] <- 1/length(unique(example))
+    }
+    next_element <- colnames(probability_matrix)[which.max(probability_matrix)]
+    next_element_probability <- max(probability_matrix)
+    if (sum(probability_matrix[1,]==next_element_probability)>1){
+      next_element <- sample(colnames(probability_matrix)[probability_matrix[1,]==next_element_probability],1,replace = F)
+    }
+    #to jest ciągle aktualizująca się tabela, w której zapisywany jest przewidywany następny wyraz, jego prawdopodobieństwo oraz długość historii na podstawie, której został przewidziany. Po uaktualnieniu każdej historii jest 
+    comparison_data_frame <- data.frame(next_element,next_element_probability)
+    #historia 2
+    if (i > 3){
+      transition_matrix[compare(transition_matrix[,c(1:2)],example[c((i-3),(i-2))]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]] <- transition_matrix[compare(transition_matrix[,c(1:2)],example[c((i-3),(i-2))]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]]+1
+      temp_table <- (t(apply(transition_matrix[compare(transition_matrix[,c(1:2)],example[c((i-2):(i-1))]),c((history+1):(dim(transition_matrix)[2]))],2,sum)))
+      probability_matrix <- temp_table/sum(temp_table)
+      if (sum(temp_table)<1){
+        probability_matrix[1,] <- 1/length(unique(example))
+      }
+      next_element <- colnames(probability_matrix)[which.max(probability_matrix)]
+      next_element_probability <- max(probability_matrix)
+      if (sum(probability_matrix[1,]==next_element_probability)>1){
+        next_element <- sample(colnames(probability_matrix)[probability_matrix[1,]==next_element_probability],1,replace = F)
+      }
+      comparison_data_frame <- rbind(comparison_data_frame,data.frame(next_element,next_element_probability))
+    }
+    # #historia 3
+    # if (i > 4){
+    #   transition_matrix[compare(transition_matrix[,c(1:3)],example[c((i-4):(i-2))]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]] <- transition_matrix[compare(transition_matrix[,c(1:3)],example[c((i-4):(i-2))]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]]+1
+    #   temp_table <- (t(apply(transition_matrix[compare(transition_matrix[,c(1:3)],example[c((i-3):(i-1))]),c((history+1):(dim(transition_matrix)[2]))],2,sum)))
+    #   probability_matrix <- temp_table/sum(temp_table)
+    #   if (sum(temp_table)<1){
+    #     probability_matrix[1,] <- 1/length(unique(example))
+    #   }
+    #   next_element <- colnames(probability_matrix)[which.max(probability_matrix)]
+    #   next_element_probability <- max(probability_matrix)
+    #   if (sum(probability_matrix[1,]==next_element_probability)>1){
+    #     next_element <- sample(colnames(probability_matrix)[probability_matrix[1,]==next_element_probability],1,replace = F)
+    #   }
+    #   comparison_data_frame <- rbind(comparison_data_frame,data.frame(next_element,next_element_probability))
+    # }
+    # #historia 4
+    # if (i > 5){
+    #   transition_matrix[compare(transition_matrix[,c(1:4)],example[c((i-5):(i-2))]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]] <- transition_matrix[compare(transition_matrix[,c(1:4)],example[c((i-5):(i-2))]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]]+1
+    #   temp_table <- (t(apply(transition_matrix[compare(transition_matrix[,c(1:4)],example[c((i-4):(i-1))]),c((history+1):(dim(transition_matrix)[2]))],2,sum)))
+    #   probability_matrix <- temp_table/sum(temp_table)
+    #   if (sum(temp_table)<1){
+    #     probability_matrix[1,] <- 1/length(unique(example))
+    #   }
+    #   next_element <- colnames(probability_matrix)[which.max(probability_matrix)]
+    #   next_element_probability <- max(probability_matrix)
+    #   if (sum(probability_matrix[1,]==next_element_probability)>1){
+    #     next_element <- sample(colnames(probability_matrix)[probability_matrix[1,]==next_element_probability],1,replace = F)
+    #   }
+    #   comparison_data_frame <- rbind(comparison_data_frame,data.frame(next_element,next_element_probability))
+    # }
+    # #historia 5
+    # if (i > 6){
+    #   transition_matrix[compare(transition_matrix[,c(1:5)],example[c((i-6):(i-2))]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]] <- transition_matrix[compare(transition_matrix[,c(1:5)],example[c((i-6):(i-2))]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]]+1
+    #   temp_table <- (t(apply(transition_matrix[compare(transition_matrix[,c(1:5)],example[c((i-5):(i-1))]),c((history+1):(dim(transition_matrix)[2]))],2,sum)))
+    #   probability_matrix <- temp_table/sum(temp_table)
+    #   if (sum(temp_table)<1){
+    #     probability_matrix[1,] <- 1/length(unique(example))
+    #   }
+    #   next_element <- colnames(probability_matrix)[which.max(probability_matrix)]
+    #   next_element_probability <- max(probability_matrix)
+    #   if (sum(probability_matrix[1,]==next_element_probability)>1){
+    #     next_element <- sample(colnames(probability_matrix)[probability_matrix[1,]==next_element_probability],1,replace = F)
+    #   }
+    #   comparison_data_frame <- rbind(comparison_data_frame,data.frame(next_element,next_element_probability))
+    # }
+    #zapisanie historii, która zostanie wybrana do przewidzenia  
+    which_history[i] <- which.max(comparison_data_frame$next_element_probability)
+    #zapisanie kolejnego przewidzianego elementu.
+    ciag[i] <- as.numeric(as.character(comparison_data_frame$next_element[which_history[i]]))
+  }
+  return(list(which_history,ciag,transition_matrix))
+}
+```
+```{r echo=FALSE}
+tabela_3 <- Markov_new(with_heteregonity_new)[[3]]
+kable(tabela_3,format="html",caption="Tabela 3. Macierz dla historii dwa")%>%kable_styling(bootstrap_options="bordered",full_width=T,position="center")%>%scroll_box(height="500px")
+```
+
+
+## Wnioski z obu algorytmów
+
+Ogólnie dzięki temu, że trochę podłubałem w tych algorytmach to zorientowałem się, że zwiększenie historii czasem powoduje, że będziemy gorzej przewidywać, a nie lepiej, tzn. tak jak mówiłem na samym początku ten algorytm, który my wykorzystujemy do przewidywania ludzi (dzięki temu, że trochę teraz podłubałem w tym to napisałem lepszy - lepiej przewidujący ludzi) brał całkowicie arbitralnie historię 1, 3 i 5. Dzięki tak dobranej historii następujący ciąg był w stanie przewidzieć z prawdopodobieństwem 0.701342, jednak biorąc po uwagę tylko historię jeden prawdopodobieństwo rośnie do 0.7147651 (trochę jeszcze z niezrozumiałych dla mnie powodów jeśli użyję tego nowego algorytmu i będę się opierał tylko na historii jeden ale niejako brał pod uwagę historię do 5 to wtedy prawdopodobieństwo spada o kilka dziesiątych procenta).  
+`r (example_1_new)`   
+
+
+Ogólnie poprzedni akapit miał pokazać, że dodanie historii niekoniecznie zaowocuje zwiększeniem przewidywalności. U ludzi to jeszcze można wytłumaczyć tym, że heurystyka losowości obejmuje tylko historię jeden. Co patrząc w kontekście literatury ma sens, ale to akurat w tym wypadku bez znaczenia.
+
+## Dane z symulacji
+
+Po przydługim wstępie, wreszcie czas na to co zrobiłem nowego. Po pierwsze na sam początek puściłem wszystko jeszcze raz za pomocą nowego algorytmu (na razie głównie będę się skupiał na przewidywalności jako mierze dobroci dopasowania. Do rozkładu historii przejdę na sam koniec). Poniżej jest tabela, w której są prawdopodobieństwa przewidzenia ciągu.
+
+Użyta metoda|Wykorzystana historia |With heteregonity | Without heteregonity
+------------|----------------------|------------------|---------------------
+Stary algorytm|1,2,3,4,5|0.352518|0.151898
+Nowy algorytm|1,2,3,4,5|0.45|0.1125
+Nowy algorytm|1|0.4071429|0.0875
+Nowy algorytm|2|0.3357143|0.1
+Nowy algorytm|3|0.2571429|0.0875
+Nowy algorytm|4|0.2071429|0.0625
+Nowy algorytm|5|0.1714286|0.0875
+Nowy algorytm|1,2|0.4357143|0.125
+Nowy algorytm|1,3|0.4071429|**0.1625**
+Nowy algorytm|1,4|0.3928571|0.0625
+Nowy algorytm|1,5|0.3857143|0.0875
+Nowy algorytm|1,2,3|0.45|0.15
+Nowy algorytm|1,2,4|0.45|0.0875
+Nowy algorytm|1,2,5|0.414285|0.1
+Nowy algorytm|1,3,4|0.4|0.15
+Nowy algorytm|1,3,5|0.3857143|**0.1625**
+Nowy algorytm|1,4,5|0.3928571|0.1
+Nowy algorytm|1,2,3,4|**0.4642857**|0.1125
+Nowy algorytm|1,3,4,5|0.3857143|**0.1625**
+Nowy algorytm|1,2,3,5|0.4428571|0.1375
+Nowy algorytm|1,2,4,5|0.45|0.1
+
+Jedno co na pewno widać na podstawie powyższej tabeli, że zgodnie z oczekiwaniami długość historii wpływa na przewidywanie, tzn. w przypadku ciągu z heteregonity dodanie historii 5 obniża prawdopodobieństwo przewidzenia ciągu. Dzieje się tak ponieważ algorytmowi wydaje się, że znalazł wzór przy historii 5, a tak naprawdę był to przypadek. W przypadku without heteregonity widać, że tak naprawdę do przewidzenia jest potrzebna historia 1 i 3. Historia 4 i 5 nie pomaga ale też nie przeszkadza, za to historia 2 już przeszkadza. Oczywiście powyżej przedstawiona tabela nie zawiera wszystkich możliwych kombinacji bo projektując mój algorytm nie wpadłem na to, że to będzie miało takie znaczenie. Myślałem, że najwyższe prawdopodobieństwo wskażę najlepszy z punktu widzenia globalnego wyraz. Okazało się to nie prawdą więc historię musiałem wymuszać niejako ręcznie. Wybrałem najciekawsze według mnie kombinacje (zawsze uwzględniałem historię jeden bo nie uwzględnienie jej zwiększa element losowy). Dużą wadą ogólnie tych metod jest to, że zawsze będzie w nich jakiś element losowy, tzn. zawsze znajdzie się wyraz (przynajmniej jeden), który będzie trzeba wylosować bo prawdopodobieństwo wielu binów będzie takie samo. Dlatego powyższe wartości mogą się wahać +/- 0.02, raczej nie więcej bo góra dwa, trzy wyrazy były losowane. Oczywiście rozwiązaniem jest policzenie wartości oczekiwanej na podstawie powiedzmy 100 czy 1000 prób, ale to mimo tego, że ten algorytm jest całkiem szybki to trochę to potrwa. Poza tym w tym momencie taka dokładność nie byłą mi potrzebna zwłaszcza przy nierównej liczbie binów.
+
+## Ujednolicenie liczby binów
+
+Jedna uwaga na wstępie zanim przejdę do szczegółów. Z dłuższego ciągu, czyli z with heteregonity brałem tylko pierwsze 80 wyrazów bo długość ciągu też ma znaczenie.
+
+###1. Decyle
+Miałem zacząć od odchyleń standardowych ale łatwiej było od decyli. W ten sposób chciałem uzyskać 10 przedziałów, w których będzie po równo wyników (w sensie procentowym). Dopiero po policzeniu tego zorientowałem się, że był to chybiony pomysł, tzn. pomysł był chybiony nie dlatego, że nic z tego nie wyszło tylko z założenia był chybiony. Jakoś nie wpadłem na to, że przecież tak naprawdę w binowaniu chodzi nam o zbinowanie podobnych czasów, a nie części rozkładu. Poniżej tabela z wynikami ale tak jak można się było spodziewać nic specjalnie nie wnosi.
+
+Użyta metoda|Wykorzystana historia |With heteregonity | Without heteregonity
+------------|----------------------|------------------|---------------------
+Nowy algorytm|1,2,3,4,5|0.0875|0.0875
+Nowy algorytm|1|0.05|0.075
+Nowy algorytm|2|0.0875|0.0875
+Nowy algorytm|3|0.125|0.05
+Nowy algorytm|4|0.1125|0.075
+Nowy algorytm|5|0.125|0.0625
+Nowy algorytm|1,2|0.05|0.0875
+Nowy algorytm|1,3|0.0625|0.075
+Nowy algorytm|1,4|0.05|0.05
+Nowy algorytm|1,5|0.0375|0.1125
+Nowy algorytm|1,2,3|0.075|0.1
+Nowy algorytm|1,2,4|0.05|0.0875
+Nowy algorytm|1,2,5|0.075|0.1
+Nowy algorytm|1,3,4|0.025|0.0625
+Nowy algorytm|1,3,5|0.05|0.0875
+Nowy algorytm|1,4,5|0.0625|0.075
+Nowy algorytm|1,2,3,4|0.0875|0.0875
+Nowy algorytm|1,3,4,5|0.025|0.0375
+Nowy algorytm|1,2,3,5|0.0875|0.0875
+Nowy algorytm|1,2,4,5|0.05|0.075
+
+###2. Odchylenie standardowe
+Z odchyleniem standardowym główny problem jest taki, że jest nierówna liczba binów. Dla with heteregonity jest ich 7, a dla without heteregonity jest 6. Przy nierównej liczbie binów powinno być łatwiej przewidzieć ten ciąg z mniejszą liczbą binów, a wcale tak nie jest. Nie wprost pokazuje to, że with heteregonity jest bardziej stabilny.
+
+Użyta metoda|Wykorzystana historia |With heteregonity | Without heteregonity
+------------|----------------------|------------------|---------------------
+Nowy algorytm|1,2,3,4,5|0.5625|0.4
+Nowy algorytm|1|0.55|0.425
+Nowy algorytm|2|0.4625|0.35
+Nowy algorytm|3|0.3625|0.3125
+Nowy algorytm|4|0.2625|0.3
+Nowy algorytm|5|0.2125|0.275
+Nowy algorytm|1,2|0.575|0.4375
+Nowy algorytm|1,3|0.5625|**0.4625**
+Nowy algorytm|1,4|0.5625|0.4125
+Nowy algorytm|1,5|0.575|0.3875
+Nowy algorytm|1,2,3|0.5625|0.4
+Nowy algorytm|1,2,4|0.5625|0.4
+Nowy algorytm|1,2,5|**0.575**|0.3875
+Nowy algorytm|1,3,4|**0.575**|0.4125
+Nowy algorytm|1,3,5|**0.575**|0.4125
+Nowy algorytm|1,4,5|**0.575**|0.4
+Nowy algorytm|1,2,3,4,5|0.5625|0.4
+Nowy algorytm|1,3,4,5|**0.575**|0.4
+Nowy algorytm|1,2,3,5|**0.575**|0.4125
+Nowy algorytm|1,2,4,5|0.5625|0.3875
+
+Ten sam problem co poprzednio. Żeby wyciągać wnioski na temat historii trzeba policzyć wartość oczekiwaną.
+
+###3. Wymuszenie 10 przedziałów
+Wydaje mi się, że najbardziej naturalnym sposobem zbinowania w tym przypadku będzie podzielenie po prostu czasu na równą ilość przedziałów. W tabeli poniżej przedstawione są wyniki dla 10 równych binów. W przypadku with heteregonity bin jest szerokości 10.8 sekund, a without heteregonity 17.72 sekund.
+
+Użyta metoda|Wykorzystana historia |With heteregonity | Without heteregonity
+------------|----------------------|------------------|---------------------
+Nowy algorytm|1,2,3,4,5|0.5375|0.25
+Nowy algorytm|1|0.4375|0.25
+Nowy algorytm|2|0.4375|0.2
+Nowy algorytm|3|0.375|0.175
+Nowy algorytm|4|0.175|0.075
+Nowy algorytm|5|0.225|0.125
+Nowy algorytm|1,2|0.5|**0.2625**
+Nowy algorytm|1,3|0.5|**0.2625**
+Nowy algorytm|1,4|0.475|0.2125
+Nowy algorytm|1,5|0.5|**0.2625**
+Nowy algorytm|1,2,3|**0.55**|0.2375
+Nowy algorytm|1,2,4|0.525|0.2375
+Nowy algorytm|1,2,5|**0.55**|0.25
+Nowy algorytm|1,3,4|0.5|0.25
+Nowy algorytm|1,3,5|0.5125|0.2375
+Nowy algorytm|1,4,5|0.5125|0.2125
+Nowy algorytm|1,2,3,4|0.5375|0.225
+Nowy algorytm|1,3,4,5|0.5125|**0.2625**
+Nowy algorytm|1,2,3,5|**0.55**|0.2125
+Nowy algorytm|1,2,4,5|0.5375|0.225
+
+Tak jak pisałem poprzednio muszę policzyć wartość oczekiwaną tych prawdopodobieństw przy policzeniu tego przynajmniej 100 razy wtedy będzie można wnioskować o historii lepiej.
+
+## Wnioski
+
+Ogólnie mam wrażenie, że robi się coraz bardziej ciekawiej, tzn. nowy algorytm w połączeniu z ostatnim zbinowaniem robi chyba to co miał robić - pokazuje większą stabilność with heteregonity w porównaniu z without heteregonity. Żeby można było powiedzieć coś więcej o historii trzeba będzie policzyć to więcej razy. Może przez weekend ustawie drugi komputer do liczenia tego. Mam jeszcze dwa pomysły na to jak ulepszyć ten algorytm (tzn. jeszcze nie wiem czy to w czymś pomoże ale jeszcze bym w tym podłubał).
+Ciekawi mnie teraz jak ten algorytm będzie się zachowywał jeśli wysłałbyś mi dane bardziej do siebie podobne, tzn. z tego co zrozumiałem to te, które teraz od Ciebie dostałem są dość skrajne i oczywiste w rozróżnieniu.
+```{r echo=F}
+# sum(list_with_heteregonity_full[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_full[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h1[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h1[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h2[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h2[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h3[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h3[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h4[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h4[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h5[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h5[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h12[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h12[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h13[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h13[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h14[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h14[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h15[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h15[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h123[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h123[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h124[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h124[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h125[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h125[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h134[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h134[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h135[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h135[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h145[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h145[[2]]==without_heteregonity_new)/80
+# 
+# 
+# sum(list_with_heteregonity_only_h11234[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h1234[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h1345[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h1345[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h1235[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h1235[[2]]==without_heteregonity_new)/80
+# 
+# sum(list_with_heteregonity_only_h1245[[2]][1:80]==with_heteregonity_new[1:80])/80
+# sum(list_without_heteregonity_only_h1245[[2]]==without_heteregonity_new)/80
+```
+
+
+
+
