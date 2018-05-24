@@ -13,10 +13,24 @@ Markov <- function(ciag=ciag,historia=5){
     wynik <- wynik>(length(vector)-1)
     return(wynik)
   }
+  ## funkcja do liczenia klasycznego prawdopodobieństwa elementów ciągu
+  prawdop <- function(ciag=ciag){
+    l <- 1
+    p <- 0
+    for (n in unique(ciag) %>% sort){
+      number <- ciag %>%
+        as_data_frame() %>%
+        filter(value==n) %>%
+        nrow()
+      suma <- length(ciag)
+      p[l] <- (number/suma)
+      l <- l+1
+    }
+    return(p)}
   ## losowanie pierwszego elementu ciągu
   predicted_ciag <- data_frame(item=sample(unique(ciag),1),
                                history=-1,
-                               p=.5)
+                               p=1/(unique(ciag) %>% length()))
   ## stworzenie listy tabel, w której zapisane są wszystkie kombinacje elementów dla danej historii. Oznacza to, że dla historii 1 i ciągu składającego się tylko z dwóch elementów tabela ma dwa wiersze.
   historia_lista <- list()
   for (i in (1:historia)) {
@@ -29,16 +43,6 @@ Markov <- function(ciag=ciag,historia=5){
   }
   ## element po elemencie przechodzenie przez ciąg
   for (i in (2:(ciag %>% length))){
-    ## samoaktualizująca się lista tabel dla wszysktkich historii
-    historia_lista <- lapply(X=historia_lista,
-                             FUN=function(table){
-                               if (i-(dim(table)[2]-1)>0){
-                                 comaprison <- compare(table=table %>% select(-n),
-                                                       vector=ciag[(i-(dim(table)[2]-1)):(i-1)])
-                                 table$n[comaprison] <- table$n[comaprison]+1
-                               }
-                               return(table)
-                             })
     ## lista tabel z przewidywaniami dotyczącymi następnego elementu
     transition_matrix <- lapply(X=historia_lista,
                                 FUN=function(table){
@@ -53,10 +57,9 @@ Markov <- function(ciag=ciag,historia=5){
                                       filter(comparison_prediction) %>%
                                       mutate(p=n/suma) %>%
                                       select(-n) %>%
-                                      mutate(p=if_else(is.nan(p),.5,p)) %>%
-                                      filter(p>=.5) %>%
+                                      mutate(p=if_else(is.nan(p),1,p)) %>%
+                                      filter(p>=1/(unique(ciag[1:(i-1)]) %>% length)) %>%
                                       select((ncol(.)-1):ncol(.)) 
-                                    
                                     if (dim(prediction)[1]>1){
                                       prediction <- prediction %>%
                                         slice(sample(c(1:length(prediction)),1))
@@ -66,11 +69,22 @@ Markov <- function(ciag=ciag,historia=5){
                                   return(NULL)
                                   
                                 })
+    ## samoaktualizująca się lista tabel dla wszysktkich historii
+    historia_lista <- lapply(X=historia_lista,
+                             FUN=function(table){
+                               if (i-(dim(table)[2]-1)>0){
+                                 comaprison <- compare(table=table %>% select(-n),
+                                                       vector=ciag[(i-(dim(table)[2]-1)):(i-1)])
+                                 table$n[comaprison] <- table$n[comaprison]+1
+                               }
+                               return(table)
+                             })
     ## uzupełnienie listy tabel z przewidywaniami o pierwszą tabelę, bo ona jest inna niż wszyskie inne. Jest to po prostu klasyczne prawdopodobieństwo przy założeniu niezależności zdarzeń
-    transition_matrix[[1]] <- data_frame(V0=c(0,1),p=c(1-(sum(ciag[1:i])/i),sum(ciag[1:i]/i))) 
+    transition_matrix[[1]] <- data_frame(V0=unique(ciag[1:(i-1)]) %>% sort,
+                                         p=prawdop(ciag[1:(i-1)])) 
     ## tabela z przewidywanym następnym elementem na podstawie historii 0
     predicted_item <- data_frame(item=0,history=0,p=0) %>%
-      mutate(item=sample(x=unique(ciag) %>% sort,size=1,prob=transition_matrix[[1]]$p),
+      mutate(item=sample(x=ciag[1:(i-1)] %>% unique %>% sort() %>% as.character(),size=1,prob=transition_matrix[[1]]$p) %>% as.numeric,
              history=0,
              p=transition_matrix[[1]]$p %>% max)
     ## wybór historii o najwyższym prawdopodobieństwie
@@ -87,8 +101,7 @@ Markov <- function(ciag=ciag,historia=5){
     predicted_ciag <-   rbind(predicted_ciag,predicted_item)
   }
   ## zwraca tabele z przewidywanym elementem, historią na podstawie, której dokonywane jest przeiwydanie oraz prawdopodobieństwem tej hsitorii (przy historii 0 to prawdopodobieństwo wcale nie musi być poprawne, bo tam jest element losowy)
-  return(predicted_ciag)  
+  return(predicted_ciag %>% mutate(ciag=ciag))  
 }
 
 
-Markov(example)
