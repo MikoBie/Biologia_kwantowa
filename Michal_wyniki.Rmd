@@ -1,0 +1,273 @@
+---
+title: "Michal wyniki"
+output: html_notebook
+---
+
+```{r global_options, include = FALSE}
+knitr::opts_chunk$set(
+    echo = FALSE, warning = FALSE, message = FALSE, include = FALSE,fig.width = 7, fig.height = 5, fig.align = "center"
+)
+pdf.options(encoding = "ISOLatin2")
+```
+
+```{r load_packages}
+library(tidyverse)
+library(magrittr)
+library(kableExtra)
+source("Stary_algorytm2.R")
+```
+
+## Wstęp
+
+Tak jak rozmawialiśmy w Ann Arbor interesowało Cię pokazanie stabilności jednego ciągu strzałów neuronów (with heteregonity) względem drugiego (without heteregonity). Pomysł, o którym wtedy rozmawialiśmy opierał się na tym, żeby wziąć odstępy pomiędzy strzałami, zbinować je **jakoś** i korzystając z metody, którą wykorzystujemy do przewidywania ludzi, a która oparta jest na ukrytych ciągach Markova porównać je między sobą. Założenie było takie, że przy takim porównaniu będzie widoczna różnica pomiędzy długością powtarzających się wzorców w obu ciągach. Jednak, żeby można było to zrobić to kluczowy okazał się sposób zbinowania czasów pomiędzy strzałami neuronów. W poniższych wynikach zastosowałem cztery różne sposoby binowania czasu:
+
+  1) zbinowałem czas po 10 jednostek.
+  2) zbinowałem czas po odchyleniach standardowych.
+  3) zbinowałem czas po decylach (to był dość chybiony pomysł).
+  4) podzieliłem czas na 10 równych części.
+
+## Opis metody
+
+Najłatwiej będzie mi opisać metodę, której używamy do przewidywania ludzi na przykładzie. Dla ułatwienia posłużę się ciągiem, który przyjmuje tylko wartości zero i jeden. Dla Twoich danych symulacyjnych to działa w sposób analogiczny tylko jest więcej możliwości, przez co te tabele poniżej byłyby mniej czytelne. Chcąc przewidzieć ostatni element takiego ciągu <img src="ciag.pdf" alt="some text"> przy klasycznym podejściu policzyłbym po prostu frekwencje jedynek (7) i podzieliłbym na liczbę wszystkich elementów (14). Nic ciekawego by z tego nie wyniknęło bo prawdopodobieństwa zer i jedynek byłyby dalej takie same. Dlatego zamiast zakładać, że pojawienie się w tym ciagu zera albo jedynki jest niezależne od tego jaki był poprzedni wyraz założę, że poprzedni wyraz ma znaczenie (dalej będę to nazywał uwzględnieniem historii jeden). W związku z tym tworzona jest tabela, w której zapisuje wystąpienia tym razem par (patrz poniżej Tabela 1.).
+
+```{r tabela1, include=TRUE}
+
+h1 <- c(0,0,1,1)
+q <- c(0,1,0,1)
+n <- c(2,5,4,2)
+
+data_frame(h1,q,n) %>%
+  kable("html",caption="Tabela 1. Tabela częstości dla historii jeden") %>%
+  kable_styling("bordered", full_width = FALSE, position="center") %>%
+  column_spec(c(1:3), width="7em")
+```
+
+Z Tabeli 1 widać, że skoro ostatnim elementem przed tym, który chcę zgadnąć jest jedynką to z prawdopodobieństwem $\frac{2}{3}$ kolejnym będzie zero. Jest to wyższe prawdopodobieństwo niż to uzyskane przy założeniu, że zdarzenia są niezależne.
+
+Algorytm, którego używam porównuje między sobą prawdopodobieństwa uzyskane przy założeniu niezależności oraz historii od jednego do pięciu[^1]. Wybiera najwyższe i na jego podstawie przewiduje kolejny element. Jest to algorytm uczący się, bo przy każdym kolejnym elemencie ta tabela się aktualizuje. Innymi słowy na podstawie takiej tabeli jak ta poniżej wybierane jest najwyższe prawdopodobieństwo, a co za tym idzie kolejny element ciągu.
+
+[^1]: Tutaj głównym ograniczeniem jest RAM, bo w sytuacji, w której mamy tylko dwa stany tak jak tutaj to można zwiększać tę historię dość swobodnie. Przy większej liczbie stanów zaczynają się schody bo wielkość tabel rośnie potęgowo przez co rośnie też liczba porównań. To w jakimś stopniu jest też ograniczenie dla liczby binów. Im mniej binów tym dłuższe wzorce można badać.
+
+```{r tabela2, include=TRUE}
+h2 <- c("-","-",0,0) 
+h1 <- c(1,1,1,1)
+q <- c(0,1,0,1)
+n <- c(4,2,2,2)
+p <- c(2/3,1/3,1/2,1/2) %>% round(2)
+
+data_frame(h2,h1,q,n,p) %>%
+  kable("html",caption="Tabela 2. Macierz na podstawie historii jeden i dwa") %>%
+  kable_styling("bordered", full_width = FALSE, position="center") %>%
+  column_spec(c(1:5), width="5.5em")
+```
+
+Opisany powyżej algorytm zwraca przewidywany element, prawdopodobieństwo przewidywania oraz długość historii na podstawie, której jest ono policzone. W badaniach, które robiliśmy na ludziach (brzmi to trochę złowieszczo) liczyliśmy zgodność przewidywań algorytmu z oryginalnym ciągiem. Była to dla nas miara przewidywalności. Jak rozumiem Ciebie bardziej interesuje rozróżnienie pomiędzy danymi z with heteregonity i without heteregonity.
+
+## Wyniki
+
+```{r load_data}
+#symulacje Michała
+vector_of_files <- list.files("~/Desktop/Biologia_kwantowa",pattern = ".dat$")
+
+#with heteregonity
+with_heteregonity <- read.delim(paste0(vector_of_files[1]),header = F, sep = '\t') %>%
+  mutate(gap=V1-lag(V1),
+         gap=if_else(is.na(gap),V1[1],gap),
+         bin=cut(x=gap,
+                 breaks=seq(0,120,by=10),
+                 labels=FALSE),
+         sd_bin=cut(x=gap,
+                breaks=c(mean(gap)-3*sd(gap),mean(gap)-2*sd(gap),mean(gap)-sd(gap),mean(gap),mean(gap)+sd(gap),mean(gap)+2*sd(gap),mean(gap)+3*sd(gap),mean(gap)+4*sd(gap),mean(gap)+5*sd(gap),mean(gap)+6*sd(gap)),
+                labels=FALSE),
+         bin_10=cut(x=gap,
+                    breaks=seq(range(gap)[1],range(gap)[2],by=(range(gap)[2]-range(gap)[1])/10),
+                    labels=FALSE,
+                    include.lowest = TRUE),
+         quantile=cut(x=gap,
+                      breaks=quantile(gap, probs=seq(0,1,0.1), type=1),
+                      labels=FALSE),
+         quantile=if_else(is.na(quantile),as.integer(1),quantile))
+
+
+#without heteregonity
+without_heteregonity <- read.delim(paste0(vector_of_files[2]),header = F, sep = '\t') %>%
+  mutate(gap=V1-lag(V1),
+         gap=if_else(is.na(gap),V1[1],gap),
+         bin=cut(x=gap,
+                 breaks=seq(0,200,by=10),
+                 labels=FALSE),
+         sd_bin=cut(x=gap,
+                breaks=c(mean(gap)-3*sd(gap),mean(gap)-2*sd(gap),mean(gap)-sd(gap),mean(gap),mean(gap)+sd(gap),mean(gap)+2*sd(gap),mean(gap)+3*sd(gap),mean(gap)+4*sd(gap),mean(gap)+5*sd(gap),mean(gap)+6*sd(gap)),
+                labels=FALSE),
+         bin_10=cut(x=gap,
+                    breaks=seq(range(gap)[1],range(gap)[2],by=(range(gap)[2]-range(gap)[1])/10),
+                    labels=FALSE,
+                    include.lowest = TRUE),
+         quantile=cut(x=gap,
+                      breaks=quantile(gap, probs=seq(0,1,0.1), type=1),
+                      labels=FALSE),
+         quantile=if_else(is.na(quantile),as.integer(1),quantile))
+```
+
+Do policzenia opisanych poniżej wyników używałem tych dwóch ciągów z symulacji, które mi wysłałeś. Miały one nierówną liczbę strzałów neuronów, a co za tym idzie liczbę odstępów. Co ma o tyle duże znaczenie, że mój algorytm jest algorytmem uczącym się - im więcej ma danych tym lepsze robi przewidywania (przynajmniej w teorii). Dlatego, żeby nie zakłamywać obrazu wziąłem równą liczbę odstępów zarówno dla tego ciągu with heteregonity jak i without heteregonity. Same zaś wyniki podzieliłem na cztery sposoby binowania o których pisałem we wstępie.
+
+## Biny po 10 jednostek czasu
+
+Mój pierwszy pomysł polegał na tym, że odstępy między strzałami neuronów podzieliłem na przedziały po 10 jednostek. W taki sposób, że dla ciągu with heteregonity dla którego największy odstęp wynosił 113.7 stworzyłem 12 przedziałów (0-10, 11-20 itp.), natomiast dla without heteregonity 20 przedziałów od 0 do 200. Oczywiście dla obu ciagów niektóre biny były puste. Tabela 3. pokazuje liczebności w dziewięciu niepustych binach dla ciągu with hetereognity.
+
+```{r tabela_3, include=TRUE}
+with_heteregonity %>% slice(1:81) %$% bin %>% table() %>% t %>% kable("html", caption="Tabela 3. Liczebność w binach dla with heteregonity") %>%
+  kable_styling("bordered", full_width = FALSE, position="center") %>%
+  column_spec(c(1:9),width_max = "3em",width_min = "3em")
+```
+
+W tabeli 4. pokazane są liczebności 15 niepustych binów dla ciągu without heteregonity.
+
+```{r tabela_4, include=TRUE}
+without_heteregonity$bin %>% table() %>% t %>% kable("html",caption="Tabela 4. Liczebność w binach dla without heteregonity") %>%
+  kable_styling("bordered", full_width = FALSE, position="center") %>%
+  column_spec(c(1:15),width_max = "3em",width_min = "3em")
+```
+
+Używając tak stworzonych binów puściłem mój algorytm dla historii od 1 do 5 (do policzenia wyższych historii brakuje mi RAMu). Dla ciągu with heteregonity mój algorytm przewidział dobrze $33.75\%$ oryginalnego ciągu, czyli $3.04$ razy lepiej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Natomiast dla ciągu without hetereognity przewidział dobrze $12.5\%$ oryginalnego ciągu, czyli $1.86$ razy lepiej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów.
+
+```{r zwykle_biny_obliczenia}
+## Markov dla zwykłych binów
+with_heteregonity_bin <- Markov(with_heteregonity$bin)
+without_heteregonity_bin <- Markov(without_heteregonity$bin)
+
+# ile razy lepiej niż przy niezależności zdarzeń i równym prawdopodobieństwie binów. With heteregonity
+(sum(with_heteregonity_bin %>% slice(2:81) %$% item == with_heteregonity_bin %>% slice(2:81) %$% ciag)/length(with_heteregonity_bin %>% slice(2:81) %$% ciag))*9
+
+# ile razy lepiej niż przy niezależności zdarzeń i równym prawdopodobieństwie binów. Without heteregonity
+(sum(without_heteregonity_bin %>% slice(2:81) %$% item == without_heteregonity_bin %>% slice(2:81) %$% ciag)/length(without_heteregonity_bin %>% slice(2:81) %$% ciag)) * 15
+```
+
+Jeśli zaś chodzi o historię na podstawie, której były dokonywane przewidywania to na wykresie 1 znajduje się porównanie historii dobrych przewidywań. To znaczy, że dobre przewidywania - czyli gdy element oryginalnego ciagu był równy elementowi wyprodukowanemu przez algorytm na pdostawie historii - w przypadku ciągu without heteregonity były robione tylko dla historii dwa i trzy. Nie było żadnych dobrych przewidywań dla historii zero, jeden, cztery i pięć. Innymi słowy w tym ciągu powtarzające się miały długość 
+
+```{r zwykkle_biny_wykres}
+
+data_frame(dane=with_heteregonity_bin %>% slice(2:81) %>% filter(item==ciag) %$% history %>% factor(levels=c(0:5)),
+             grupa=rep(1,27)) %>%
+    bind_rows(data_frame(dane=without_heteregonity_bin %>% slice(2:81) %>% mutate(dobre_without=if_else(item==ciag,"Dobre","Złe")) %>% View %>% filter(item==ciag) %$% history %>% factor(levels=c(0:5)),
+                         grupa=rep(2,10))) %>%
+    ggplot() +
+    geom_histogram(aes(dane,fill=grupa %>% as.factor),stat="count", position = "dodge") +
+    theme_classic() +
+    scale_fill_discrete("",labels=c("With heteregonity","Without heteregonity")) +
+    labs(x = "Długość historii", y = "Liczebność",
+    title = "Częstości poszczególnych historii przy zwykłych binach",
+    subtitle = "",
+    caption = "")
+
+```
+
+2) Przy pomocy metody opartej na ukrytych ciągach Markowa postarać się jak najlepiej przewidzieć każdy z ciągów. Jak najlepiej w tym przypadku oznacza, że wygenerowany przez algorytm ciąg będzie jak najbardziej podobny do oryginalnego.
+3) Sprawdzenie na jakiej podstawie ten algorytm wygenerował najlepszy ciąg. W idealnym świecie w przypadku jednego ciągu byłoby to np. zawsze na podstawie poprzedniego wyrazu, a w przypadku drugiego byłoby to w 25% na podstawie poprzedniego wyrazu, 25% na podstawie dwóch poprzedniech wyrazów, 25% na podstawie trzech poprzednich wyrazów i 25% na podstawie czterech poprzednich wyrazów. Innymi słowy porównanie ze sobą na jakiej podstawie zostały zrobione najlepsze przewidywania.
+3*) Można też porównać ze sobą wyniki dopasowania ciągów wygenerowanych przez algorytm i oryginalnych. Ma to jednak tę wadę, że jest mocno zależne od liczby binów, która powinna być taka sama.
+
+
+
+```{r computation}
+## Markov dla zwykłych binów
+with_heteregonity_bin <- Markov(with_heteregonity$bin)
+without_heteregonity_bin <- Markov(without_heteregonity$bin)
+
+## Markov dla odchylenia standardowego
+with_heteregonity_bin_sd <- Markov(with_heteregonity$sd_bin)
+without_heteregonity_bin_sd <- Markov(without_heteregonity$sd_bin)
+
+## Markov dla decyli
+with_heteregonity_decyle <- Markov(with_heteregonity$quantile)
+without_heteregonity_decyle <- Markov(without_heteregonity$quantile)
+
+## Markov równy podział na 10
+with_heteregonity_bin_10 <- Markov(with_heteregonity$bin_10)
+without_heteregonity_bin_10 <- Markov(without_heteregonity$bin_10)
+
+nazwy <- list(with_heteregonity_bin,without_heteregonity_bin,with_heteregonity_bin_sd,without_heteregonity_bin_sd,with_heteregonity_decyle,without_heteregonity_decyle,with_heteregonity_bin_10,without_heteregonity_bin_10)
+```
+
+```{r computation_10}
+## Markov dla zwykłych binów
+with_heteregonity_bin_10 <- Markov(with_heteregonity$bin,8)
+without_heteregonity_bin_10 <- Markov(without_heteregonity$bin,8)
+
+## Markov dla odchylenia standardowego
+with_heteregonity_bin_sd_10 <- Markov(with_heteregonity$sd_bin,8)
+without_heteregonity_bin_sd_10 <- Markov(without_heteregonity$sd_bin,8)
+
+## Markov dla decyli
+with_heteregonity_decyle_10 <- Markov(with_heteregonity$quantile,8)
+without_heteregonity_decyle_10 <- Markov(without_heteregonity$quantile,8)
+
+## Markov równy podział na 10
+with_heteregonity_bin_10_10 <- Markov(with_heteregonity$bin_10,8)
+without_heteregonity_bin_10_10 <- Markov(without_heteregonity$bin_10,8)
+
+nazwy_10 <- list(with_heteregonity_bin_10,without_heteregonity_bin_10,with_heteregonity_bin_sd_10,without_heteregonity_bin_sd_10,with_heteregonity_decyle_10,without_heteregonity_decyle_10,with_heteregonity_bin_10_10,without_heteregonity_bin_10_10)
+```
+
+```{r probability_check}
+probability <- 0
+for (i in c(1:8)) {
+  probability[i] <- sum(nazwy[[i]]$item[1:81]==nazwy[[i]]$ciag[1:81])/length(nazwy[[i]]$ciag[1:81])
+}
+
+
+  data_frame(dane=nazwy[[1]] %>% slice(2:81) %$% history %>% factor(levels=c(0:5)),
+             grupa=rep(1,80)) %>%
+    bind_rows(data_frame(dane=nazwy[[2]] %>% slice(2:81) %$% history %>% factor(levels=c(0:5)),
+                         grupa=rep(2,80))) %>%
+    ggplot() +
+    geom_histogram(aes(dane,fill=grupa %>% as.factor),stat="count", position = "dodge") +
+    theme_classic() +
+    scale_fill_discrete("",labels=c("With heteregonity","Without heteregonity")) +
+    labs(x = "Długość historii", y = "Liczebność",
+    title = "Częstości poszczególnych historii przy zwykłych binach",
+    subtitle = "",
+    caption = "")
+  
+data_frame(dane=nazwy[[3]] %>% slice(2:81) %$% history %>% factor(levels=c(0:5)),
+             grupa=rep(1,80)) %>%
+    bind_rows(data_frame(dane=nazwy[[4]] %>% slice(2:81) %$% history %>% factor(levels=c(0:5)),
+                         grupa=rep(2,80))) %>%
+    ggplot() +
+    geom_histogram(aes(dane,fill=grupa %>% as.factor),stat="count", position = "dodge") +
+    theme_classic() +
+    scale_fill_discrete("",labels=c("With heteregonity","Without heteregonity")) +
+    labs(x = "Długość historii", y = "Liczebność",
+    title = "Częstości poszczególnych historii przy binach policzonych na podstawie odchylenia standardowego",
+    subtitle = "",
+    caption = "")
+
+data_frame(dane=nazwy[[5]] %>% slice(2:81) %$% history %>% factor(levels=c(0:5)),
+             grupa=rep(1,80)) %>%
+    bind_rows(data_frame(dane=nazwy[[6]] %>% slice(2:81) %$% history %>% factor(levels=c(0:5)),
+                         grupa=rep(2,80))) %>%
+    ggplot() +
+    geom_histogram(aes(dane,fill=grupa %>% as.factor),stat="count", position = "dodge") +
+    theme_classic() +
+    scale_fill_discrete("",labels=c("With heteregonity","Without heteregonity")) +
+    labs(x = "Długość historii", y = "Liczebność",
+    title = "Częstości poszczególnych historii przy binach jako decylach",
+    subtitle = "",
+    caption = "")
+
+data_frame(dane=nazwy[[7]] %>% slice(2:81) %$% history %>% factor(levels=c(0:5)),
+             grupa=rep(1,80)) %>%
+    bind_rows(data_frame(dane=nazwy[[8]] %>% slice(2:81) %$% history %>% factor(levels=c(0:5)),
+                         grupa=rep(2,80))) %>%
+    ggplot() +
+    geom_histogram(aes(x=dane,y=..density..,fill=grupa %>% factor),stat="count",position="identity") +
+  geom_density(aes(x=dane,y=..density..)) 
+    theme_classic() +
+    scale_fill_discrete("",labels=c("With heteregonity","Without heteregonity")) +
+    labs(x = "Długość historii", y = "Liczebność",
+    title = "Częstości poszczególnych historii przy podziale na 10 binów",
+    subtitle = "",
+    caption = "")
+  # chisq.test((nazwy[[i]] %>% slice(2:81) %$% history %>% factor(levels=c(0:5)) %>% table),p=(nazwy[[i+1]] %>% slice(2:81) %$% history %>% factor(levels=c(0:5)) %>% table() %>% as_tibble %$% n)/80) %>% print
+
+
+```

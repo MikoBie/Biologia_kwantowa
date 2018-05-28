@@ -62,6 +62,7 @@ Markov <- function(ciag=ciag,historia=5){
                                       select((ncol(.)-1):ncol(.)) 
                                     if (dim(prediction)[1]>1){
                                       prediction <- prediction %>%
+                                        mutate(p=1/length(prediction)) %>%
                                         slice(sample(c(1:length(prediction)),1))
                                     }
                                     return(prediction)
@@ -84,8 +85,10 @@ Markov <- function(ciag=ciag,historia=5){
                                          p=prawdop(ciag[1:(i-1)])) 
     ## tabela z przewidywanym następnym elementem na podstawie historii 0
     predicted_item <- data_frame(item=0,history=0,p=0) %>%
-      mutate(item=sample(x=ciag[1:(i-1)] %>% unique %>% sort() %>% as.character(),size=1,prob=transition_matrix[[1]]$p) %>% as.numeric,
-             history=0,
+      mutate(item=if((transition_matrix[[1]] %>% filter(p==max(transition_matrix[[1]]$p)) %>% nrow())==1){
+                          transition_matrix[[1]] %>% filter(max(transition_matrix[[1]]$p)==p) %$% V0 %>% return()}else{
+                          sample(transition_matrix[[1]] %>% filter(p==max(transition_matrix[[1]]$p)) %$% V0 %>% as.character(),size=1) %>% as.numeric() %>% return()},
+             history=1,
              p=transition_matrix[[1]]$p %>% max)
     ## wybór historii o najwyższym prawdopodobieństwie
     for (j in c(2:historia)){
@@ -103,5 +106,9 @@ Markov <- function(ciag=ciag,historia=5){
   ## zwraca tabele z przewidywanym elementem, historią na podstawie, której dokonywane jest przeiwydanie oraz prawdopodobieństwem tej hsitorii (przy historii 0 to prawdopodobieństwo wcale nie musi być poprawne, bo tam jest element losowy)
   return(predicted_ciag %>% mutate(ciag=ciag))  
 }
+
+example <- c(0,1,1,0,0,1,1,0,1,0,1,0,0,1)
+debug(Markov)
+Markov(example,2) %>% View
 
 
