@@ -129,7 +129,7 @@ without_heteregonity$bin %>% table() %>% t %>% kable("html",caption="Tabela 4. L
   column_spec(c(1:15),width_max = "3em",width_min = "3em")
 ```
 
-Używając tak stworzonych binów puściłem mój algorytm dla historii od 1 do 5 (do policzenia wyższych historii brakuje mi RAMu). Dla ciągu with heteregonity mój algorytm przewidział dobrze $33.75\%$ oryginalnego ciągu, czyli $3.04$ razy lepiej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Natomiast dla ciągu without hetereognity przewidział dobrze $12.5\%$ oryginalnego ciągu, czyli $1.86$ razy lepiej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów.
+Używając tak stworzonych binów puściłem mój algorytm dla historii od 1 do 5 (do policzenia wyższych historii brakuje mi RAMu). Dla ciągu with heteregonity mój algorytm przewidział dobrze $41.25\%$ oryginalnego ciągu (przy uwzględnieniu elementu losowego wartość oczekiwana rośnie do $45.81\%$), czyli $3.71$ razy lepiej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Natomiast dla ciągu without hetereognity przewidział dobrze $8.75\%$ oryginalnego ciągu (przy uwzględnieniu elementu losowego wartość oczekiwana rośnie do $21.22\%$), czyli $1.31$ razy lepiej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Moim zdaniem dość ciekawe jest to jak przyrasta wartość oczekiwana w przypadku tego ciągu without heteregonity. Jest to spowodowane tym, że w przypadku ciągu without heteregonity w aż 29 przypadkach występuje element losowy w przewidywaniu. Tzn. że algorytm nie może wybrać kolejnego elementu na podstawie najwyższego prawdopodobieństwa bo przynajmniej dla dwóch elementów to prawdopodobieństwo jest równe. W przypadku ciągu with heteregonity jest tylko 8 sytuacji gdy występuje element losowy. Oczywiście ma to pewnie związek z dużo mniejszą liczbą binów w przypadku ciągu with heteregonity. 
 
 ```{r zwykle_biny_obliczenia}
 ## Markov dla zwykłych binów
@@ -139,8 +139,14 @@ without_heteregonity_bin <- Markov(without_heteregonity$bin)
 # ile razy lepiej niż przy niezależności zdarzeń i równym prawdopodobieństwie binów. With heteregonity
 (sum(with_heteregonity_bin %>% slice(2:81) %$% item == with_heteregonity_bin %>% slice(2:81) %$% ciag)/length(with_heteregonity_bin %>% slice(2:81) %$% ciag))*9
 
+with_heteregonity_bin %>% slice(1:81) %>% filter(item==100) %>% nrow
+
+
+
 # ile razy lepiej niż przy niezależności zdarzeń i równym prawdopodobieństwie binów. Without heteregonity
 (sum(without_heteregonity_bin %>% slice(2:81) %$% item == without_heteregonity_bin %>% slice(2:81) %$% ciag)/length(without_heteregonity_bin %>% slice(2:81) %$% ciag)) * 15
+
+
 ```
 
 Jeśli zaś chodzi o historię na podstawie, której były dokonywane przewidywania to na wykresie 1 znajduje się porównanie historii dobrych przewidywań. To znaczy, że dobre przewidywania - czyli gdy element oryginalnego ciagu był równy elementowi wyprodukowanemu przez algorytm na pdostawie historii - w przypadku ciągu without heteregonity były robione tylko dla historii dwa i trzy. Nie było żadnych dobrych przewidywań dla historii zero, jeden, cztery i pięć. Innymi słowy w tym ciągu powtarzające się miały długość 
@@ -148,9 +154,9 @@ Jeśli zaś chodzi o historię na podstawie, której były dokonywane przewidywa
 ```{r zwykkle_biny_wykres}
 
 data_frame(dane=with_heteregonity_bin %>% slice(2:81) %>% filter(item==ciag) %$% history %>% factor(levels=c(0:5)),
-             grupa=rep(1,27)) %>%
-    bind_rows(data_frame(dane=without_heteregonity_bin %>% slice(2:81) %>% mutate(dobre_without=if_else(item==ciag,"Dobre","Złe")) %>% View %>% filter(item==ciag) %$% history %>% factor(levels=c(0:5)),
-                         grupa=rep(2,10))) %>%
+             grupa=rep(1,33)) %>%
+    bind_rows(data_frame(dane=without_heteregonity_bin %>% slice(2:81) %>% filter(item==ciag) %$% history %>% factor(levels=c(0:5)),
+                         grupa=rep(2,7))) %>%
     ggplot() +
     geom_histogram(aes(dane,fill=grupa %>% as.factor),stat="count", position = "dodge") +
     theme_classic() +

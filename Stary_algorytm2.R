@@ -73,8 +73,10 @@ Markov <- function(ciag=ciag,historia=5){
                                     if (dim(prediction)[1]>1){
                                       prediction <- prediction %>%
                                         filter(prediction[,1] %>% t %in% unique(ciag[1:(i-1)])) %>%
-                                        mutate(p=1/(unique(ciag[1:(i-1)]) %>% length())) %>%
-                                        slice(sample(c(1:length(prediction)),1))
+                                        mutate(p=1/(prediction %>% nrow())) %>%
+                                        slice(sample(c(1:length(prediction)),1)) 
+                                      ## powoduje, że nie ma elementu losowego
+                                      prediction[1,1] <- 100
                                     }
                                     return(prediction)
                                   }
@@ -88,7 +90,10 @@ Markov <- function(ciag=ciag,historia=5){
     predicted_item <- data_frame(item=0,history=0,p=0) %>%
       mutate(item=if((transition_matrix[[1]] %>% filter(p==max(transition_matrix[[1]]$p)) %>% nrow())==1){
                           transition_matrix[[1]] %>% filter(max(transition_matrix[[1]]$p)==p) %$% V0 %>% return()}else{
-                          sample(transition_matrix[[1]] %>% filter(p==max(transition_matrix[[1]]$p)) %$% V0 %>% as.character(),size=1) %>% as.numeric() %>% return()},
+                          sample(transition_matrix[[1]] %>% filter(p==max(transition_matrix[[1]]$p)) %$% V0 %>% as.character(),size=1) %>% as.numeric() #%>% return()
+                            ## powoduje, że nie ma elementu losowego
+                            return(100)
+                            },
              history=1,
              p=transition_matrix[[1]]$p %>% max)
     ## wybór historii o najwyższym prawdopodobieństwie
