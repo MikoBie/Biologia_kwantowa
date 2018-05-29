@@ -43,6 +43,16 @@ Markov <- function(ciag=ciag,historia=5){
   }
   ## element po elemencie przechodzenie przez ciąg
   for (i in (2:(ciag %>% length))){
+    ## samoaktualizująca się lista tabel dla wszysktkich historii
+    historia_lista <- lapply(X=historia_lista,
+                             FUN=function(table){
+                               if (i-(dim(table)[2]-1)>0){
+                                 comaprison <- compare(table=table %>% select(-n),
+                                                       vector=ciag[(i-(dim(table)[2]-1)):(i-1)])
+                                 table$n[comaprison] <- table$n[comaprison]+1
+                               }
+                               return(table)
+                             })
     ## lista tabel z przewidywaniami dotyczącymi następnego elementu
     transition_matrix <- lapply(X=historia_lista,
                                 FUN=function(table){
@@ -70,16 +80,6 @@ Markov <- function(ciag=ciag,historia=5){
                                   return(NULL)
                                   
                                 })
-    ## samoaktualizująca się lista tabel dla wszysktkich historii
-    historia_lista <- lapply(X=historia_lista,
-                             FUN=function(table){
-                               if (i-(dim(table)[2]-1)>0){
-                                 comaprison <- compare(table=table %>% select(-n),
-                                                       vector=ciag[(i-(dim(table)[2]-1)):(i-1)])
-                                 table$n[comaprison] <- table$n[comaprison]+1
-                               }
-                               return(table)
-                             })
     ## uzupełnienie listy tabel z przewidywaniami o pierwszą tabelę, bo ona jest inna niż wszyskie inne. Jest to po prostu klasyczne prawdopodobieństwo przy założeniu niezależności zdarzeń
     transition_matrix[[1]] <- data_frame(V0=unique(ciag[1:(i-1)]) %>% sort,
                                          p=prawdop(ciag[1:(i-1)])) 
@@ -107,8 +107,5 @@ Markov <- function(ciag=ciag,historia=5){
   return(predicted_ciag %>% mutate(ciag=ciag))  
 }
 
-example <- c(0,1,1,0,0,1,1,0,1,0,1,0,0,1)
-debug(Markov)
-Markov(example,2) %>% View
 
 
