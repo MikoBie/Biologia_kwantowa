@@ -72,7 +72,8 @@ Markov <- function(ciag=ciag,historia=5){
                                       select((ncol(.)-1):ncol(.)) 
                                     if (dim(prediction)[1]>1){
                                       prediction <- prediction %>%
-                                        mutate(p=1/length(prediction)) %>%
+                                        filter(prediction[,1] %>% t %in% unique(ciag[1:(i-1)])) %>%
+                                        mutate(p=1/(unique(ciag[1:(i-1)]) %>% length())) %>%
                                         slice(sample(c(1:length(prediction)),1))
                                     }
                                     return(prediction)
