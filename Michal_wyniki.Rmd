@@ -1,6 +1,8 @@
 ---
-title: ""
-output: html_notebook
+title: ''
+output:
+  html_notebook:
+    toc: yes
 ---
 
 ```{r global_options, include = FALSE}
@@ -20,7 +22,7 @@ load("Michal_wyniki.RData")
 
 ## Wstęp
 
-Tak jak rozmawialiśmy w Ann Arbor interesowało Cię pokazanie stabilności jednego ciągu strzałów neuronów (with heteregonity) względem drugiego (without heteregonity). Pomysł, o którym wtedy rozmawialiśmy opierał się na tym, żeby wziąć odstępy pomiędzy strzałami, zbinować je **jakoś** i korzystając z metody, którą wykorzystujemy do przewidywania ludzi, a która oparta jest na ukrytych ciągach Markova porównać je między sobą. Założenie było takie, że przy takim porównaniu będzie widoczna różnica pomiędzy długością powtarzających się wzorców w obu ciągach. Jednak, żeby można było to zrobić to kluczowy okazał się sposób zbinowania czasów pomiędzy strzałami neuronów. W poniższych wynikach zastosowałem cztery różne sposoby binowania czasu:
+Tak jak rozmawialiśmy w Ann Arbor interesowało Cię pokazanie stabilności jednego ciągu strzałów neurona (with heteregonity) względem drugiego (without heteregonity). Pomysł, o którym wtedy rozmawialiśmy opierał się na tym, żeby wziąć odstępy pomiędzy strzałami, zbinować je *jakoś* (oryginalne czasy odstępów się nie powtarzają) i korzystając z metody, którą wykorzystujemy do przewidywania ludzi, a która oparta jest na ukrytych ciągach Markova porównać je między sobą. Założenie było takie, że przy takim porównaniu będzie widoczna różnica pomiędzy długością powtarzających się wzorców w obu ciągach. Jednak, żeby można było to zrobić to kluczowy okazał się sposób zbinowania czasów pomiędzy strzałami neurona. W poniższych wynikach zastosowałem cztery różne sposoby binowania czasu:
 
   1) zbinowałem czas po 10 jednostek.
   2) zbinowałem czas po odchyleniach standardowych.
@@ -29,7 +31,7 @@ Tak jak rozmawialiśmy w Ann Arbor interesowało Cię pokazanie stabilności jed
 
 ## Opis metody
 
-Najłatwiej będzie mi opisać metodę, której używamy do przewidywania ludzi na przykładzie. Dla ułatwienia posłużę się ciągiem, który przyjmuje tylko wartości zero i jeden. Dla Twoich danych symulacyjnych to działa w sposób analogiczny tylko jest więcej możliwości, przez co te tabele poniżej byłyby mniej czytelne. Chcąc przewidzieć ostatni element takiego ciągu <img src="ciag.pdf" alt="some text"> przy klasycznym podejściu policzyłbym po prostu frekwencje jedynek (7) i podzieliłbym na liczbę wszystkich elementów (14). Nic ciekawego by z tego nie wyniknęło bo prawdopodobieństwa zera i jedynki byłyby dalej takie same. Dlatego zamiast zakładać, że pojawienie się w tym ciagu zera albo jedynki jest niezależne od tego jaki był poprzedni wyraz założę, że poprzedni wyraz ma znaczenie (dalej będę to nazywał uwzględnieniem historii jeden). W związku z tym mój algorytm tworzy tabelę, w której zapisuje wystąpienia tym razem par (porównaj Tabela 1.).
+Zacznę jednak od opisu metody. Najłatwiej będzie to zrobić na przykładzie, w którym dla ułatwienia posłużę się ciągiem, który przyjmuje tylko wartości zero i jeden. Dla Twoich danych symulacyjnych to działa w sposób analogiczny tylko jest więcej możliwości, przez co ta tabela poniżej byłaby mniej czytelna. Chcąc przewidzieć ostatni element takiego ciągu <img src="ciag.pdf" alt="some text"> przy klasycznym podejściu policzyłbym po prostu frekwencje jedynek (7) i podzieliłbym na liczbę wszystkich elementów (14). Nic ciekawego by z tego nie wyniknęło bo prawdopodobieństwa zera i jedynki byłyby dalej takie same. Dlatego zamiast zakładać, że pojawienie się w tym ciagu zera albo jedynki jest niezależne od tego jaki był poprzedni wyraz założę, że poprzedni wyraz ma znaczenie (dalej będę to nazywał uwzględnieniem historii jeden). W związku z tym mój algorytm tworzy tabelę, w której zapisuje wystąpienia par (porównaj tabela 1.).
 
 ```{r tabela1, include=TRUE}
 
@@ -48,7 +50,7 @@ Z tabeli 1 widać, że skoro ostatnim elementem przed tym, który chcę zgadną�
 
 Algorytm, którego używam porównuje między sobą prawdopodobieństwa uzyskane przy założeniu niezależności oraz historii od jednego do pięciu[^1]. Wybiera najwyższe i na jego podstawie przewiduje kolejny element. Jest to algorytm uczący się, bo przy każdym kolejnym elemencie odpowiednie tabele się aktualizują.
 
-[^1]: Tutaj głównym ograniczeniem jest RAM, bo w sytuacji, w której mamy tylko dwa stany tak jak w tym przykładzie można zwiększać historię dość swobodnie. Przy większej liczbie stanów zaczynają się schody bo wielkość tabel rośnie potęgowo przez co rośnie też liczba porównań. To w jakimś stopniu jest też ograniczenie dla liczby binów. Im mniej binów tym dłuższe historie, wzorce można badać.
+[^1]: Tutaj głównym ograniczeniem jest RAM, bo w sytuacji, w której mamy tylko dwa stany tak jak w tym przykładzie można zwiększać historię dość swobodnie. Przy większej liczbie stanów zaczynają się schody bo wielkość tabel rośnie wykładniczo przez co rośnie też liczba porównań. To w jakimś stopniu jest też ograniczenie dla liczby binów. Im mniej binów tym dłuższe historie, wzorce można badać.
 
 ```{r tabela2, include=FALSE}
 h2 <- c("-","-",0,0) 
@@ -63,7 +65,26 @@ data_frame(h2,h1,q,n,p) %>%
   column_spec(c(1:5), width="5.5em")
 ```
 
-Innymi słowy ten algorytm bierze ciąg dowolnej długości n o dowolnej liczbie różnych elementów, a zwraca ciąg składający się z n elementów przewidzanych na podstawie n-1 elementów oryginalnego ciągu. Poza przewidzianym ciagiem zwraca historię na pdostawie, której wytypowany został kolejny element oraz prawdopodobieństwo z jakim zostało to zrobione. W badaniach, które robiliśmy na ludziach (brzmi to trochę złowieszczo) liczyliśmy zgodność przewidywań algorytmu z oryginalnym ciągiem. Była to dla nas miara przewidywalności. Jak rozumiem Ciebie bardziej interesuje rozróżnienie pomiędzy danymi z with heteregonity i without heteregonity.
+Innymi słowy ten algorytm bierze ciąg dowolnej długości n o dowolnej liczbie różnych elementów, a zwraca ciąg składający się z n elementów przewidzianych na podstawie n-1 elementów oryginalnego ciągu. Poza przewidzianym ciągiem zwraca historię na podstawie, której wytypowany został kolejny element oraz prawdopodobieństwo z jakim zostało to zrobione (porównaj tabela 1, w której są wyniki dla przykładowego ciągu i historii od zera do jeden). Pierwszy  element jest po prostu losowany dlatego ma ujemną historię. W tabeli 1 trzecie i siódme przewidywania przyjmują wartość 100 ponieważ prawdopodobieństwo wynosi .5, trzeba by więc wylosować czy powinno być zero czy jeden. Na podstawie takiej tabeli można łatwo policzyć, że zgodność przewidzianego ciągu z oryginalnym wynosi $30.77\%$. Jest to bardzo niski wynik. Spowodowany jest on przede wszystkim tym, że przykładowy ciąg ma jedynie 14 elementów oraz tym, że bierzemy pod uwagę tylko historię zero i jeden (jeśli wziąć historię od 0 do 4 to zgodność rośnie do $38.46\%$). W badaniach, które robiliśmy na ludziach (brzmi to trochę złowieszczo) zgodność była dla nas miarą przewidywalności. Jak rozumiem Ciebie bardziej interesuje rozróżnienie pomiędzy danymi z with heteregonity i without heteregonity i historiami na podstawie, których dokonywane są przewidywania.
+
+
+```{r example_1, include=TRUE}
+example <- c(0,1,1,0,0,1,1,0,1,0,1,0,0,1,0)
+example_result <- Markov(example,2)
+
+example_result %>%
+  mutate(history=history-1,
+         p=round(p,2)) %>%
+  rename("Przewidywany element"=item,
+         "Element z oryginalengo ciągu"=ciag,
+         Historia=history) %>%
+  kable("html", caption="Tabela 1. Przykładowe wyniki algorytmu") %>% kable_styling("responsive", full_width = FALSE)
+
+sum(example_result$item[2:14] ==example_result$ciag[2:14])/13
+
+```
+
+
 
 ## Wyniki
 
@@ -110,12 +131,12 @@ without_heteregonity <- read.delim(paste0(vector_of_files[2]),header = F, sep = 
                       labels=FALSE),
          quantile=if_else(is.na(quantile),as.integer(1),quantile))
 ```
+Do policzenia opisanych poniżej wyników używałem dwóch ciągów z symulacji dla jednego neurona, które mi wysłałeś: with heteregonity i without heteregonity. Miały one nierówną liczbę strzałów, a co za tym idzie liczbę odstępów. Co ma o tyle duże znaczenie, że mój algorytm jest algorytmem uczącym się - im więcej ma danych tym lepsze robi przewidywania (przynajmniej w teorii). Dlatego, żeby nie zakłamywać obrazu wziąłem równą liczbę odstępów zarówno dla tego ciągu with heteregonity jak i without heteregonity - innymi słowy w obu ciągach uwzględniłem tylko pierwsze 81 elementów. Same zaś wyniki podzieliłem na cztery sposoby binowania o których pisałem we wstępie.
 
-Do policzenia opisanych poniżej wyników używałem dwóch ciągów z symulacji dla jednego neurona, które mi wysłałeś: with heteregonity i without heteregonity. Miały one nierówną liczbę strzałów, a co za tym idzie liczbę odstępów. Co ma o tyle duże znaczenie, że mój algorytm jest algorytmem uczącym się - im więcej ma danych tym lepsze robi przewidywania (przynajmniej w teorii). Dlatego, żeby nie zakłamywać obrazu wziąłem równą liczbę odstępów zarówno dla tego ciągu with heteregonity jak i without heteregonity - innymi słowy w obu ciągach ewzględniłem tylko pierwsze 81 elementów. Same zaś wyniki podzieliłem na cztery sposoby binowania o których pisałem we wstępie.
 
-## Biny po 10 jednostek czasu
+### Odstępy zbinowane po 10 jednostek czasu
 
-Mój pierwszy pomysł polegał na tym, żeby odstępy między strzałami podzelić na przedziały po 10 jednostek. W taki sposób, że dla ciągu with heteregonity dla którego największy odstęp wynosił 113.7 stworzyłem 12 przedziałów (0-10, 11-20 itp.), natomiast dla without heteregonity 20 przedziałów od 0 do 200. Oczywiście, spowodowało to, że dla obu ciagów niektóre biny były puste. Tabela 3. pokazuje liczebności w dziewięciu niepustych binach dla ciągu with hetereognity.
+Mój pierwszy pomysł polegał na tym, żeby odstępy między strzałami podzielić na przedziały po 10 jednostek. W taki sposób, że dla ciągu with heteregonity dla którego największy odstęp wynosił 113.7 stworzyłem 12 przedziałów (0-10, 11-20 itp.), natomiast dla without heteregonity 20 przedziałów od 0 do 200. Oczywiście, spowodowało to, że dla obu ciągów niektóre biny były puste. Tabela 3. pokazuje liczebności w dziewięciu niepustych binach dla ciągu with hetereognity.
 
 ```{r tabela_3, include=TRUE}
 with_heteregonity %>% slice(1:81) %$% bin %>% table() %>% t %>% kable("html", caption="Tabela 3. Liczebność w binach dla with heteregonity") %>%
@@ -133,7 +154,7 @@ without_heteregonity$bin %>% table() %>% t %>% kable("html",caption="Tabela 4. L
 
 Używając tak stworzonych binów puściłem mój algorytm dla historii od 0 do 4 (do policzenia wyższych historii brakuje mi RAMu). Dla ciągu with heteregonity mój algorytm przewidział dobrze $41.25\%$ oryginalnego ciągu, czyli $3.71$ razy lepiej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Natomiast dla ciągu without hetereognity przewidział dobrze $8.75\%$ oryginalnego ciągu, czyli $1.31$ razy lepiej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Poza policzeniem klasycznej zgodności ciągu wygenerowanego przez algorytm z tym przewidywanym policzyłem też wartość oczekiwaną zgodności. Czasami zdarza się, że najwyższe prawdopodobieństwo jest równe dla dwóch lub więcej elementów wtedy mój algorytm nie podejmuje decyzji i zwraca pusty element. Można jednak wylosować z tych dwóch lub więcej opcji tę, którą powinien przewidzieć (w iluś tam procentach sytuacji trafi). W związku z tym wartością oczekiwaną nazywam zgodność przewidzianego ciągu z uwzględnieniem losowania i oryginalnego ciągu.
 
-W tym przypadku jest to dość ciekawe jak wartość oczekiwana się zmienia. W ciągu without heteregonity jest to przyrost z $8.75\%$ na $21.22$, a w przypadku with hteregonity z $41.25\%$ na $45.81\%$. Jest to spowodowane tym, że w przypadku ciągu without heteregonity w aż 29 przypadkach występuje element losowy w przewidywaniu. Tzn. że algorytm nie może wybrać kolejnego elementu na podstawie najwyższego prawdopodobieństwa bo przynajmniej dla dwóch elementów to prawdopodobieństwo jest równe. W przypadku ciągu with heteregonity jest tylko 8 sytuacji gdy występuje element losowy. W jakimś stopniu można to pewnie tłumaczyć różną ilością binów, jednak warto zwrócić uwagę na to, że w każdym z tych przypadków jest tak, że algorytm musi dokonać wyboru nie między wszystkimi opcjami, a tylko między przynajmniej dwoma, które już wystąpiły, tzn. w przypadku ciągu with hetereognity i tych 8 sytuacji prawdopodobieństwo zawsze było równe $.5$. Innymi słowy algorytm nie mógł podjąć decyzji bo były dwa równo prawdopodobne rozwiązania, które już wystąpiły w tym ciągu przynajmniej raz. Nie było więc tak, że nie mógł podjąć decyzji bo jeszcze nie wystąpiła kombinacja na podstawie, której przewiduje. W przypadku without heteregonity jest to trochę bardziej skomplikowane, ale też nie było takiej sytuajci, że algorytm wybierał ze wszyskitch dostępnych możliwości.
+W tym przypadku jest to dość ciekawe jak wartość oczekiwana się zmienia. W ciągu without heteregonity jest to przyrost z $8.75\%$ na $21.22\%$, a w przypadku with hteregonity z $41.25\%$ na $45.81\%$. Jest to spowodowane tym, że w przypadku ciągu without heteregonity w aż 29 przypadkach występuje element losowy w przewidywaniu. Tzn. że algorytm nie może wybrać kolejnego elementu na podstawie najwyższego prawdopodobieństwa bo przynajmniej dla dwóch elementów to prawdopodobieństwo jest równe. W przypadku ciągu with heteregonity jest tylko 8 sytuacji gdy występuje element losowy. W jakimś stopniu można to pewnie tłumaczyć różną ilością binów, jednak warto zwrócić uwagę na to, że w każdym z tych przypadków jest tak, że algorytm musi dokonać wyboru nie między wszystkimi opcjami, a tylko między przynajmniej dwoma, które już wystąpiły, tzn. w przypadku ciągu with hetereognity i tych 8 sytuacji prawdopodobieństwo zawsze było równe $.5$. Innymi słowy algorytm nie mógł podjąć decyzji bo były dwa równo prawdopodobne rozwiązania, które już wystąpiły w tym ciągu przynajmniej raz. Nie było więc tak, że nie mógł podjąć decyzji bo jeszcze nie wystąpiła kombinacja na podstawie, której przewiduje. W przypadku without heteregonity jest to trochę bardziej skomplikowane, ale też nie było takiej sytuacji, że algorytm wybierał ze wszystkich dostępnych możliwości.
 
 ```{r zwykle_biny_obliczenia}
 ## Markov dla zwykłych binów
@@ -153,7 +174,7 @@ with_heteregonity_bin %>% slice(1:81) %>% filter(item==100) %>% nrow
 
 ```
 
-Jeśli zaś chodzi o historię na podstawie, której były dokonywane przewidywania to na wykresie 1 znajduje się porównanie historii dobrych przewidywań - takich, które pokrywały się z oryginalnym ciagiem. Historia 0 oznacza, że przewidywanie było robione na podstawie klasycznego prawdopodobieństwa, tzn. na podstawie częstości wystąpienia w ciągu, a historia 1 i wyższe oznaczają, że prawdopodobieństwo było liczone na podstawie 1, 2, 3 lub 4 poprzednich wyrazów. Na tym wykresie widać, że dla ciągu with heteregonity większość przewidywań była robiona na podstawie zwykłych proporcji. Jest to o tyle oczywiste, że gdy się przyjrzeć temu ciągowi to widać, że pierwsze 7 wyrazów przyjmuje wartość 3, a ogółem w aż 31 sytuacjach przymuje on wartość 3. Innymi słowy małpa widząc, że pierwszy element jest trójką i strzelająca, że zawsze jest trójka dostałaby $37.5\%$. Trzeba przyznać, że z tej perspektywy poprawienie tego wyniku o $3.75\%$ nie jest jakimś wyczynem, zwłaszcza, że oczywiście ten algorytm nie zawsze tę 3 trafiał. Jednak to co chyba Ciebie interesuje najbardziej to to, że występują też powtarzające się dłuższe wzroce. Jest ich w sumie 20 (5 historii jeden, 8 historii 3, 2 historii trzy i 2 historii cztery). W przypadku ciągu without heteregonity przewidywanie na podstawie proporcji jest tylko jedno i dotyczy elementu o wartości 5 (o drugiej najwyższej częstości). Widać też, że gdyby zastosować metodę małpy i wybierać tylko pierwszy element (4) to zgodność z oryginalnym ciągiem wynosiłaby $17.5\%$, czyli dwa razy lepsza niż ta osiągnięta przez algorytm. Jest to związane z liczbą binów oraz z małą powtarzalnością wzorców - 6 (1 historii jeden i 5 historii dwa).
+
 
 ```{r zwykkle_biny_wykres, include=TRUE, warning=FALSE}
 data_frame(dane=with_heteregonity_bin %>% slice(2:81) %>% filter(item==ciag) %$% history %>% factor(levels=c(0:5)),
@@ -171,10 +192,11 @@ data_frame(dane=with_heteregonity_bin %>% slice(2:81) %>% filter(item==ciag) %$%
     caption = "")
 
 ```
+Jeśli zaś chodzi o historię na podstawie, której były dokonywane przewidywania to na wykresie 1 znajduje się porównanie historii dobrych przewidywań - takich, które pokrywały się z oryginalnym ciągiem. Historia 0 oznacza, że przewidywanie było robione na podstawie klasycznego prawdopodobieństwa, tzn. na podstawie częstości wystąpienia w ciągu, a historia 1 i wyższe oznaczają, że prawdopodobieństwo było liczone na podstawie 1, 2, 3 lub 4 poprzednich wyrazów. Na tym wykresie widać, że dla ciągu with heteregonity większość przewidywań była robiona na podstawie zwykłych proporcji. Jest to o tyle oczywiste, że gdy się przyjrzeć temu ciągowi to widać, że pierwsze 7 wyrazów przyjmuje wartość 3, a ogółem w aż 31 sytuacjach przyjmuje on wartość 3. Innymi słowy małpa widząc, że pierwszy element jest trójką i strzelająca, że zawsze jest trójka dostałaby $37.5\%$. Trzeba przyznać, że z tej perspektywy poprawienie tego wyniku o $3.75\%$ nie jest jakimś wyczynem, zwłaszcza, że oczywiście ten algorytm nie zawsze tę 3 trafiał. Jednak to co chyba Ciebie interesuje najbardziej to to, że występują też powtarzające się dłuższe wzorce. Jest ich w sumie 20 (5 historii jeden, 8 historii 3, 2 historii trzy i 2 historii cztery). W przypadku ciągu without heteregonity przewidywanie na podstawie proporcji jest tylko jedno i dotyczy elementu o wartości 5 (o drugiej najwyższej częstości). Widać też, że gdyby zastosować metodę małpy i wybierać tylko pierwszy element (4) to zgodność z oryginalnym ciągiem wynosiłaby $17.5\%$, czyli dwa razy lepsza niż ta osiągnięta przez algorytm. Jest to związane z liczbą binów oraz z małą powtarzalnością wzorców - 6 (1 historii jeden i 5 historii dwa).
 
-## Biny jako odchylenie standardowe
+### Odstępy zbinowane po odchyleniach standardowych
 
-W tym przypadku policzyłem dla każdego z ciągów odchylenie standardowe i zbinowałem każdy ciąg po odchyleniach standardowych. Dla ciągu with heteregonity poswtało w ten sposób 7 binów (od minus drugiego odchylenia standardowego do plus szóstego). W tabeli 5 znajdują się liczebności tylko siedmiu binów ponieważ był jeden odstęp między strzałami, który znajdował się między plus piątym odchyelniem i plus szóstym, ale nie było żadnego, który byłby pomiędzy plus czwartym i plus piątym.
+W tym przypadku policzyłem dla każdego z ciągów odchylenie standardowe i zbinowałem każdy ciąg po odchyleniach standardowych. Dla ciągu with heteregonity powstało w ten sposób 7 binów (od minus drugiego odchylenia standardowego do plus szóstego). W tabeli 5 znajdują się liczebności tylko siedmiu binów ponieważ był jeden odstęp między strzałami, który znajdował się między plus piątym odchyleniem i plus szóstym, ale nie było żadnego, który byłby pomiędzy plus czwartym i plus piątym.
 
 ```{r tabela5, include=TRUE}
 with_heteregonity %>% slice(1:81) %$% sd_bin %>% table() %>% t %>% kable("html", caption="Tabela 5. Liczebność w binach dla with heteregonity") %>%
@@ -190,7 +212,7 @@ without_heteregonity %>% slice(1:81) %$% sd_bin %>% table() %>% t %>% kable("htm
   column_spec(c(1:6),width_max = "3em",width_min = "3em")
 ```
 
-Używając tak stworzonych binów puściłem mój algorytm dla historii 0 do 8 (jest mniej binow niż w przypadku poprzedniej metody binowania dzięki czemu mniej zapycha RAM). Dla ciągu with heteregonity mój algorytm przewidział dobrze $55\%$ oryginalnego ciągu (nie pojawia się ani razu sytuacja gdy mógłby się pojawić element losowy więc wartość oczekiwana jest taka sama jak wynik przewidywania), czyli $3.85$ razy lepiej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Natomiast dla ciągu without hetereognity przewidział dobrze $40\%$ oryginalnego ciągu (przy uwzględnieniu elementu losowego wartość oczekiwana rośnie do $41.88\%$), czyli $2.4$ razy lepiej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Ciekawe jest to, że mimo że w drugim przypadku jest mniej binów, a więc przewidywanie powinno być lepsze niż w przypadku przewidywania pierwszego ciągu to tak nie jest. Jakimś wytłumaczeniem jest fakt że w obu tych ciągach jest jeden bin, który dominuje pozostałe, w przypadku with heteregonity trzeci bin stanowi $61.73\%$ wszystkich binów, a w przypadku without heteregonity drugi bin stanowi $50.62\%$. Nie wiem na ile oczywiste jest to, że więszkość wyników w obu przypadkach jest między minus pierwszym i plus pierwszym odchyleniem standardowym. W przypadku with heteregonity jest to $81.25\%$, a w przypadku without heteregonity $80\%$ (porównaj wykres 2).
+Używając tak stworzonych binów puściłem mój algorytm dla historii 0 do 8 (jest mniej binow niż w przypadku poprzedniej metody binowania dzięki czemu mniej zapycha RAM). Dla ciągu with heteregonity mój algorytm przewidział dobrze $55\%$ oryginalnego ciągu (nie pojawia się ani razu sytuacja gdy mógłby się pojawić element losowy więc wartość oczekiwana jest taka sama jak wynik przewidywania), czyli $3.85$ razy lepiej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Natomiast dla ciągu without hetereognity przewidział dobrze $40\%$ oryginalnego ciągu (przy uwzględnieniu elementu losowego wartość oczekiwana rośnie do $41.88\%$), czyli $2.4$ razy lepiej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Ciekawe jest to, że mimo że w drugim przypadku jest mniej binów, a więc przewidywanie powinno być lepsze niż w przypadku przewidywania pierwszego ciągu to tak nie jest. Jakimś wytłumaczeniem jest fakt że w obu tych ciągach jest jeden bin, który dominuje pozostałe, w przypadku with heteregonity trzeci bin stanowi $61.73\%$ wszystkich binów, a w przypadku without heteregonity drugi bin stanowi $50.62\%$. Nie wiem na ile oczywiste jest to, że większość wyników w obu przypadkach jest między minus pierwszym i plus pierwszym odchyleniem standardowym. W przypadku with heteregonity jest to $81.25\%$, a w przypadku without heteregonity $80\%$ (porównaj wykres 2).
 
 ```{r rozklad_binow, include=TRUE}
 with_heteregonity %>% slice(1:81) %>%
@@ -205,7 +227,7 @@ with_heteregonity %>% slice(1:81) %>%
     caption = "")
 ```
 
-Jeśli zaś chodzi o historię na podstawie, której były dokonywane przewidywania to na wykresie 3 znajduje się analogiczny do wykresu 1 histogram. Widać na nim, że dla obu ciągów przewidywania były robione w główenj mierze na podstawie zwykłej proporcji. Jest to o tyle oczywiste, że w obu przypadkach najczęstszy wyraz stanowił ponad $50\%$ ciągu. Z resztą jeśli przyjrzeć się tym wykresom hisotrii to są one do siebie dość podobne. Sprawdziłem przy pomocy Pearson Goodness of Fit Test, że o ile wprzypadku historii ciągu without heteregonity można mówić, że istotnie różni się rozkład historii od ciągu with heteregonity ($\chi{2}=26.14,\ p=0.002$), to w drugą stronę już tak nie jest ($\chi{2}=6.74,\ p=0.23$). Innymi słowy można powiedzieć, że na podstawie rozkładu without heteregonity jest szansa $.2\%$, że dostaniemy taki rozkład jak with heteregonity, podczas gdy z rozkładu with heteregonity w $23\%$ sytuacji dostaniemy taki rozkład jak w ciągu without heteregonity.
+Jeśli zaś chodzi o historię na podstawie, której były dokonywane przewidywania to na wykresie 3 znajduje się analogiczny do wykresu 1 histogram. Widać na nim, że dla obu ciągów przewidywania były robione w głównej mierze na podstawie zwykłej proporcji. Jest to o tyle oczywiste, że w obu przypadkach najczęstszy wyraz stanowił ponad $50\%$ ciągu. Z resztą jeśli przyjrzeć się tym wykresom historii to są one do siebie dość podobne. Sprawdziłem przy pomocy Pearson Goodness of Fit Test, że o ile w przypadku historii ciągu without heteregonity można mówić, że istotnie różni się rozkład historii od ciągu with heteregonity ($\chi{2}=26.14,\ p=0.002$), to w drugą stronę już tak nie jest ($\chi{2}=6.74,\ p=0.23$). Innymi słowy można powiedzieć, że na podstawie rozkładu without heteregonity jest szansa $.2\%$, że dostaniemy taki rozkład jak with heteregonity, podczas gdy z rozkładu with heteregonity w $23\%$ sytuacji dostaniemy taki rozkład jak w ciągu without heteregonity.
 
 ```{r biny_dochylenie_standardowe}
 # with_heteregonity_sd <- Markov(with_heteregonity$sd_bin,9)
@@ -227,7 +249,7 @@ chisq.test((without_heteregonity_bin_sd %>% slice(2:81) %>% filter(ciag==item) %
 
 ((((without_heteregonity_bin_sd %>% slice(2:81) %>% filter(ciag==item) %$% history %>% table)/32)-((with_heteregonity_bin_sd %>% slice(2:81) %>% filter(ciag==item) %$% history %>% table)/44))^2/((with_heteregonity_bin_sd %>% slice(2:81) %>% filter(ciag==item) %$% history %>% table)/44)) %>% sum() * 32
 ```
-```{r binyc_odchylenie_standardowe_wykresy, include=TRUE, message=FALSE}
+```{r binyc_odchylenie_standardowe_wykresy, include=TRUE, message=FALSE, warning=FALSE}
 data_frame(dane=with_heteregonity_bin_sd %>% slice(2:81) %>% filter(item==ciag) %$% history,
              grupa=rep(1,44)) %>%
     bind_rows(data_frame(dane=without_heteregonity_bin_sd %>% slice(2:81) %>% filter(item==ciag) %$% history,
@@ -239,15 +261,15 @@ data_frame(dane=with_heteregonity_bin_sd %>% slice(2:81) %>% filter(item==ciag) 
     scale_x_continuous(breaks=c(0:5)) +
     scale_fill_discrete("",labels=c("With heteregonity","Without heteregonity")) +
     labs(x = "Długość historii", y = "Liczebność",
-    title = "Wykres 3. Częstości poszczególnych historii przy binach liczonych na podstawie odchylenia standardowego",
+    title = "Wykres 3. Częstości poszczególnych historii przy binach liczonych na podstawie \nodchylenia standardowego",
     subtitle = "",
     caption = "")
 
 ```
 
-## Biny jako decyle
+### Odstępy zbinowane po decylach
 
-Tym razem zbinowałem ciągi po decylach. W związku z tym dla obu ciągów otrzymałem tę samą liczbę obserwacji w binach poza pierwszym (w obu przypadkach w pierszym binie było 9 odstępów między strzałami, bo w sumie każdy ciąg składał się z 81 elementów). Używając tak stworzonych binów puściłem mój algorytm na historii od 0 do 6. W ten sposób dla ciągu with heteregonity algorytm przewidział dobrze $2.5\%$ oryginalnego ciągu (przy uwzględnieniu elementu losowego wartość oczekiwana rośnie do $20\%$), czyli $4$ razy gorzej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Natomiast dla ciągu without hetereognity przewidział dobrze $5\%$ oryginalnego ciągu (przy uwzględnieniu elementu losowego wartość oczekiwana rośnie do $25.11\%$), czyli $2$ razy gorzej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Moim zdaniem ten sposób binowania był po prostu chybionym pomysłem, co pewnie mogłem od razu przewidzieć. Dla porządku tylko napiszę, że w ciągu with heteregonity algorytm przewidział dwa elementy prawidłowo na podstawie historii dwa, a w ciągu without heteregonity cztery z czego jeden na podstawie historii jeden oraz trzy na podstawie historii dwa.
+Tym razem zbinowałem ciągi po decylach. W związku z tym dla obu ciągów otrzymałem tę samą liczbę obserwacji w binach poza pierwszym (w obu przypadkach w pierwszym binie było 9 odstępów między strzałami, bo w sumie każdy ciąg składał się z 81 elementów). Używając tak stworzonych binów puściłem mój algorytm na historii od 0 do 6. W ten sposób dla ciągu with heteregonity algorytm przewidział dobrze $2.5\%$ oryginalnego ciągu (przy uwzględnieniu elementu losowego wartość oczekiwana rośnie do $20\%$), czyli $4$ razy gorzej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Natomiast dla ciągu without hetereognity przewidział dobrze $5\%$ oryginalnego ciągu (przy uwzględnieniu elementu losowego wartość oczekiwana rośnie do $25.11\%$), czyli $2$ razy gorzej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Moim zdaniem ten sposób binowania był po prostu chybionym pomysłem, co pewnie mogłem od razu przewidzieć. Dla porządku tylko napiszę, że w ciągu with heteregonity algorytm przewidział dwa elementy prawidłowo na podstawie historii dwa, a w ciągu without heteregonity cztery z czego jeden na podstawie historii jeden oraz trzy na podstawie historii dwa.
 
 ```{r decyle_obliczenia}
 ## Markov dla decyli
@@ -263,7 +285,7 @@ Tym razem zbinowałem ciągi po decylach. W związku z tym dla obu ciągów otrz
 (sum(without_heteregonity_decyle %>% slice(2:81) %$% item == without_heteregonity_decyle %>% slice(2:81) %$% ciag)/length(without_heteregonity_decyle %>% slice(2:81) %$% ciag)) * 10
 ```
 
-## Podział czasu na 10 równych części
+### Odstępy podzielone na 10 równych części
 
 Ostatnim sposobem podziału na biny było podzielenie czasu na 10 równych części. W jakimś stopniu był to podobny pomysł do tego pierwszego. W ten sposób dla ciągu with heteregonity otrzymałem 10 binów po 10.08 jednostki czasu. W tabeli 7 znajdują się liczebności poszczególnych przedziałów (brakuje przedziału 9 ponieważ nie było odstępu, który zawierałby się w przedziale między 93.54, a 103.62).
 
@@ -279,7 +301,7 @@ without_heteregonity %>% slice(1:81) %$% bin_10 %>% table() %>% t %>% kable("htm
   column_spec(c(1:9),width_max = "3em",width_min = "3em")
 ```
 
-Używając tak stworzonych binów puściłem mój algorytm dla hisotrii od 0 do 6. Dla ciągu with heteregonity mój algorytm przewidział dobrze $47.5\%$ oryginalnego ciągu (przy uwzględnieniu elementu losowego wartość oczekiwana rośnie do $48.13\%$) czyli $4.28$ razy lepiej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Dla ciągu without heteregonity przewidział dobrze $13.75\%$ oryginalnego ciągu (przy uwzględnieniu elementu losowego wartość oczekiwana rośnie do $29.64\%$) czyli $1.24$ razy lepiej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Tutaj pododbnie jak w przypadku pierwszego sposobu binowania wartość oczekiwana mocno rośnie w przypadku ciągu without heteregonity. Jest to spowodowane tym, że w ciągu without hetereognity jest aż 30 przypadków, w którym występuje element losowy w przewidywaniu. Algorytm nie może wybrać kolejnego elementu na podstawie najwyższego prawdopodobieństwa bo przynajmniej dla dwóch elementów to prawdopodobieństwo jest równe. W przypadku ciągu with hteregonity jest tylko jedna taka sytuacja.
+Używając tak stworzonych binów puściłem mój algorytm dla historii od 0 do 6. Dla ciągu with heteregonity mój algorytm przewidział dobrze $47.5\%$ oryginalnego ciągu (przy uwzględnieniu elementu losowego wartość oczekiwana rośnie do $48.13\%$) czyli $4.28$ razy lepiej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Dla ciągu without heteregonity przewidział dobrze $13.75\%$ oryginalnego ciągu (przy uwzględnieniu elementu losowego wartość oczekiwana rośnie do $29.64\%$) czyli $1.24$ razy lepiej niż gdyby zakładać niezależność i równe prawdopodobieństwo binów. Tutaj podobnie jak w przypadku pierwszego sposobu binowania wartość oczekiwana mocno rośnie w przypadku ciągu without heteregonity. Jest to spowodowane tym, że w ciągu without hetereognity jest aż 30 przypadków, w którym występuje element losowy w przewidywaniu. Algorytm nie może wybrać kolejnego elementu na podstawie najwyższego prawdopodobieństwa bo przynajmniej dla dwóch elementów to prawdopodobieństwo jest równe. W przypadku ciągu with hteregonity jest tylko jedna taka sytuacja.
 
 ```{r biny_10}
 # with_heteregonity_bin_10 <- Markov(with_heteregonity$bin_10,7)
@@ -311,11 +333,47 @@ data_frame(dane=with_heteregonity_bin_10 %>% slice(2:81) %>% filter(item==ciag) 
     caption = "")
 ```
 
-Na wykresie 4 widać, że w przypadku ciągu with heteregonity najczęściej dobre przewidywania były robione na podstawie poprzedniego elementu, podczas gdy przy ciągu without heteregonity na podstawie dwóch poprzednich elementów. Moim zdaniem jest to o tyle ciekawe, że jednak spodziewałem się, że tak jak w przypadku odchylenia standardowego najwięcej dobrych przewidywań będzie na podstawie zwykłej proporcji. Zwłaszcza, że w przypadku with heteregonity ciągle jest jeden bin z dominującą liczebnością. Jest to spowodowane tym, że o ile w przypadku ciągu zbinowanego na podstawie odchylenia standardowego pierwsze ileś elementów było takie samo w związku z czym algorytm wybierał przewidywanie na podstawie zwykłej proporcji to tutaj pierwsze dwa elementy są róże i mimo że kolejnych kilka jest takich jak drugi to algorytm podejmuje decyzje na podstawie historii jeden nie proporcji (jest to spowodowane wyższym prawdopodobieństwem). Innymi słowy w jakimś stopniu przynajmniej dla stosunkowo krótkich ciągów rozkład długości historii jest zależny od kolejności tzn. jeśli mamy ciąg 2,2,2,2,2,2,2,2,2,3 i 3,2,2,2,2,2,2,2,2,2 to poza tym, że oczywiście procent przewidzenia dobrego ciągu dla pierwszego będzie $90\%$, a drugiego $70\%$ to znacząca różnica będzie w rozkładzie historii. W pierwszym przypadku wszystkie przewidywania będą robione na podstawie zwykłej proporcji w drugim tylko dwa, a pozostałe na podstawie historii jeden. To właśnie z tym związana jest różnica w rozkładach historii między binami liczonymi tutaj i liczonymi na podstawie odchylenia standardowego. Z innych ciekawych rzeczy to widać, że nie ma w ogóle przewidywań na podstawie historii 4 i 5 w przypadku ciągu without heteregonity. Oznacza to, że w przypadku ciągu without heteregonity nie było dłuższych powtarzających się ciągów, które były w przypadku with hteregonity.
+Na wykresie 4 widać, że w przypadku ciągu with heteregonity najczęściej dobre przewidywania były robione na podstawie poprzedniego elementu, podczas gdy przy ciągu without heteregonity na podstawie dwóch poprzednich elementów. Moim zdaniem jest to o tyle ciekawe, że jednak spodziewałem się, że tak jak w przypadku odchylenia standardowego najwięcej dobrych przewidywań będzie na podstawie zwykłej proporcji. Zwłaszcza, że w przypadku with heteregonity ciągle jest jeden bin z dominującą liczebnością. Jest to spowodowane tym, że o ile w przypadku ciągu zbinowanego na podstawie odchylenia standardowego pierwsze ileś elementów było takie samo w związku z czym algorytm wybierał przewidywanie na podstawie zwykłej proporcji to tutaj pierwsze dwa elementy są różne i mimo że kolejnych kilka jest takich jak drugi to algorytm podejmuje decyzje na podstawie historii jeden nie proporcji (jest to spowodowane wyższym prawdopodobieństwem). Innymi słowy w jakimś stopniu przynajmniej dla stosunkowo krótkich ciągów rozkład długości historii jest zależny od kolejności tzn. jeśli mamy ciąg 2,2,2,2,2,2,2,2,2,3 i 3,2,2,2,2,2,2,2,2,2 to poza tym, że oczywiście procent przewidzenia dobrego ciągu dla pierwszego będzie $90\%$, a drugiego $70\%$ to znacząca różnica będzie w rozkładzie historii. W pierwszym przypadku wszystkie przewidywania będą robione na podstawie zwykłej proporcji w drugim tylko dwa, a pozostałe na podstawie historii jeden. To właśnie z tym związana jest różnica w rozkładach historii między binami liczonymi tutaj i liczonymi na podstawie odchylenia standardowego. Z innych ciekawych rzeczy to widać, że nie ma w ogóle przewidywań na podstawie historii 4 i 5 w przypadku ciągu without heteregonity. Oznacza to, że w przypadku ciągu without heteregonity nie było dłuższych powtarzających się ciągów, które były w przypadku with heteregonity.
 
 ## Podsumowanie
 
-Moim zdaniem pierwszy od razu narzucający się wniosek z tego co do tej pory zrobiłem jest taki, że niezależnie od metody binowania większość tych odstępów wchodzi do jedenego lub dwóch binów. Dzieje się tak w zasadzie niezależnie od ilości binów, bo nawet przy pierwszym sposobie binowania ponad połowa wyników ($71.6\%$) jest w dwóch binach przy with heteregonity i prawie połowa ($48.15\%$) w trzech dla without heregonity.
+
+```{r tabela9, include=TRUE,message=FALSE,warning=FALSE}
+liczba_binow_with <- c(9,7,9)
+liczba_binow_without <- c(15,6,9)
+heteregonity_with <- c("41.25% (33)","55% (44)","41.13% (38)")
+heteregonity_without <- c("8.75% (7)","40% (32)","13.75% (11)")
+heteregonity_with_wo <- c("45.81% (8)","55% (0)","48.13% (1)")
+heteregonity_without_wo <- c("21.22% (29)","41.88% (1)","29.64% (30)")
+
+data_frame(liczba_binow_with,
+           liczba_binow_without,
+           heteregonity_with,
+           heteregonity_without,
+           heteregonity_with_wo,
+           heteregonity_without_wo) %>%
+  rename("with"=liczba_binow_with,
+         "without"=liczba_binow_without,
+         "with "=heteregonity_with,
+         " without "=heteregonity_without,
+         "with  "=heteregonity_with_wo,
+         "  without"=heteregonity_without_wo) %>%
+  mutate("Nazwa meotdy binowania"=c("Biny po 10 jednostek",
+                                    "Biny po odchyleniach standardowych",
+                                    "10 równych binów")) %>%
+  column_to_rownames("Nazwa meotdy binowania") %>%
+  kable("html", caption="Tabela 9. Porównanie sposobów binowania") %>%
+  add_header_above(c("",
+                   "Liczba binów"=2,
+                   "% zgodności (liczba prawidłowych przewidywań)"=2,
+                   "Wartość oczekiwana (liczba losowań)"=2)) %>%
+  kable_styling("responsive", full_width = FALSE, position="center") %>%
+  column_spec(1,width="12em") %>%
+  column_spec(c(2:3), width="4em")
+    
+```
+
+Moim zdaniem pierwszy od razu narzucający się wniosek z tego co do tej pory zrobiłem jest taki, że niezależnie od metody binowania większość tych odstępów wchodzi do jednego lub dwóch binów. Dzieje się tak w zasadzie niezależnie od ilości binów, bo nawet przy pierwszym sposobie binowania ponad połowa wyników ($71.6\%$) jest w dwóch binach przy with heteregonity i prawie połowa ($48.15\%$) w trzech dla without heregonity.
 
 Mój drugi wniosek jest taki, że to jak zostaną zbinowane te odstępy jest bardzo ważne. Wpływa nie tylko na przewidywalność, ale również na historię. Co dobrze moim zdaniem obrazuje przykład w ostatnim sposobie binowania.
 
