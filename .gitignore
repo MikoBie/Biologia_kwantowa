@@ -8,6 +8,7 @@ data/**
 *.json
 *.csv
 *.pdf
+**/*.png
 
 **/*.Rproj
 .Rproj.user
