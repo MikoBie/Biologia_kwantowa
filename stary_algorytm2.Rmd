@@ -1,0 +1,185 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(magrittr)
+library(gtools)
+```
+
+```{r}
+
+example <- read.csv("~/Desktop/Psychologia kwantowa/Survey/los_chem_zera_3_3_10_57_34.csv") %$%
+  key
+```
+
+```{r}
+index_prep<- function(breaks_example_chart,history){
+  help_data_frame <- data.frame(1:length(breaks_example_chart$gap_bin))
+  for (i in 1:history){
+    length <- c(1:length(breaks_example_chart$gap_bin))
+    temp_data_frame <- (length+1)
+    help_data_frame <- cbind(help_data_frame,temp_data_frame)
+    temp_vector <- as.vector(t(help_data_frame))
+    temp_markov_series <- breaks_example_chart$gap_bin[temp_vector]
+    temp_markov_series <- as.vector(na.omit(temp_markov_series))
+    return(temp_markov_series)
+  }
+}
+
+markov <- function(original_markov_series=breaks_example_1_chart,temp_markov_series=index_prep(breaks_example_1_chart,1),history=1){
+  compare <- function(table,vector){
+    (wynik <- t(t(table)==vector))
+    (wynik <- rowSums(wynik))
+    wynik <- wynik>(length(vector)-1)
+    return(wynik)
+  }
+  (number_of_states <- unique(original_markov_series$gap_bin))
+  (transition_matrix <- as.data.frame(cbind(permutations(n=length(number_of_states),r=history+1,v=number_of_states,repeats.allowed=T),prob=0,n=1)))
+  ciag <- 0
+  #nie wszystkie ale przynajmniej 2
+  ciag[c(1:history)] <- sample(sort(number_of_states),history,replace=T,as.vector(table(original_markov_series$gap_bin)/length(original_markov_series$gap_bin)))
+  for (i in (history+1):length(original_markov_series$gap_bin)){
+    (test_for_equality <- transition_matrix[compare(transition_matrix[,c(1:history)],temp_markov_series[(i-history):(i-1)]),])
+    max_row <- test_for_equality$n==max(test_for_equality$n)
+    if ((sum(max_row)>1) && (i!=length(temp_markov_series))){
+      max_row <- test_for_equality$n==max(test_for_equality$n)
+      ciag[i] <- sample(test_for_equality[max_row,history+1],1)
+      add_row <- compare(transition_matrix[,c(1:(history+1))],original_markov_series$gap_bin[(i-history):i])
+      transition_matrix$n[add_row] <- transition_matrix[add_row,history+3]+1
+    }
+    if (sum(max_row)<2){
+      max_row <- which.max(test_for_equality$n)
+      ciag[i] <- test_for_equality[max_row,history+1]
+      if(i!=length(temp_markov_series)){
+        add_row <- compare(transition_matrix[,c(1:(history+1))],original_markov_series$gap_bin[(i-history):i])
+        transition_matrix$n[add_row] <- transition_matrix$n[add_row]+1
+      }
+    }
+    i <- i+history
+  }
+
+  wynik <- transition_matrix
+  return(wynik)
+}
+
+```
+
+Ehhhh prawdopodbieństwo tylko dla zer i jedynek będzie 0.5
+```{r}
+Markov <- function(ciag=ciag,historia=5){
+  ## funkcja do porównywania wektora z tabelą
+  compare <- function(table,vector){
+    (wynik <- t(t(table)==vector))
+    (wynik <- rowSums(wynik))
+    wynik <- wynik>(length(vector)-1)
+    return(wynik)
+  }
+  ## losowanie pierwszego elementu ciągu
+  predicted_ciag <- data_frame(item=sample(unique(ciag),1),
+                               history=-1,
+                               p=.5)
+  ## stworzenie listy tabel, w której zapisane są wszystkie kombinacje elementów dla danej historii. Oznacza to, że dla historii 1 i ciągu składającego się tylko z dwóch elementów tabela ma dwa wiersze.
+  historia_lista <- list()
+  for (i in (1:historia)) {
+    historia_lista[[i]] <- permutations(n=ciag %>% unique %>% length,
+                                      r=i,
+                                      v=ciag %>% unique,
+                                      repeats.allowed = TRUE) %>%
+      cbind(n=0) %>%
+      as_tibble()
+  }
+  ## element po elemencie przechodzenie przez ciąg
+  for (i in (2:(ciag %>% length))){
+    ## lista tabel z przewidywaniami dotyczącymi następnego elementu
+    transition_matrix <- lapply(X=historia_lista,
+           FUN=function(table){
+             if((i-(dim(table)[2]-1)>0) & (dim(table)[2]!=2)){
+                 comparison_prediction <- compare(table=table %>% select(1:(ncol(.)-2)),
+                                                  vector=ciag[(i-(dim(table)[2]-2)):(i-1)])
+
+                 suma <- table %>%
+                   filter(comparison_prediction) %$%
+                   sum(n)
+                 prediction <- table %>%
+                   filter(comparison_prediction) %>%
+                   mutate(p=n/suma) %>%
+                   select(-n) %>%
+                   mutate(p=if_else(is.nan(p),.5,p)) %>%
+                   filter(p>=.5) %>%
+                   select((ncol(.)-1):ncol(.)) 
+                 
+                 if (dim(prediction)[1]>1){
+                   prediction <- prediction %>%
+                     slice(sample(c(1:length(prediction)),1))
+                 }
+                 return(prediction)
+             }
+             return(NULL)
+           })
+    ## samoaktualizująca się lista tabel dla wszysktkich historii
+    historia_lista <- lapply(X=historia_lista,
+           FUN=function(table){
+             if (i-(dim(table)[2]-1)>0){
+               comaprison <- compare(table=table %>% select(-n),
+                                     vector=ciag[(i-(dim(table)[2]-1)):(i-1)])
+               table$n[comaprison] <- table$n[comaprison]+1
+             }
+             return(table)
+           })
+    ## uzupełnienie listy tabel z przewidywaniami o pierwszą tabelę, bo ona jest inna niż wszyskie inne. Jest to po prostu klasyczne prawdopodobieństwo przy założeniu niezależności zdarzeń
+    transition_matrix[[1]] <- data_frame(V0=c(0,1),p=c(1-(sum(ciag[1:i])/i),sum(ciag[1:i]/i))) 
+    
+    predicted_item <- data_frame(item=0,history=0,p=0) %>%
+        mutate(item=sample(x=unique(ciag) %>% sort,size=1,prob=transition_matrix[[1]]$p),
+               history=0,
+               p=transition_matrix[[1]]$p %>% max)
+    for (j in c(2:historia)){
+      if (!is.null(transition_matrix[[j]])){
+        if (transition_matrix[[j]]$p>predicted_item$p){
+          predicted_item$p <- transition_matrix[[j]]$p
+          predicted_item$history <- j
+          predicted_item$item <- transition_matrix[[j]][1,1]
+          }
+        } 
+    }
+    predicted_ciag <-   rbind(predicted_ciag,predicted_item)
+    }
+  return(sum(predicted_ciag %$% item == ciag)/length(ciag))  
+}
+
+
+ciag <- Markov(example,5)
+ciag
+
+
+```
+
+```{r}
+wyniki <- read.csv2("~/Desktop/Psychologia kwantowa/wyniki_new.csv") %>% 
+  mutate(Predict = Predict %>% as.character() %>% as.numeric())
+
+source("Stary_algorytm2.R")
+
+c <- list()
+for (i in 1:183) {
+wektor <- wyniki %>%
+  select(starts_with("X")) %>%
+  select(-X) %>%
+  slice(i) %>%
+  select_if(.,!is.na(.)) %>%
+  t() %>%
+  as.vector()
+  c[[i]] <- Markov(wektor)
+  (sum(c[[i]] %$% ciag == c[[i]] %$% item)/length(c[[i]] %$% ciag)) %>% print()
+}
+
+Predict <- 0
+for (i in 1:183){
+  Predict[i] <- (sum(c[[i]] %$% ciag == c[[i]] %$% item)/length(c[[i]] %$% ciag))
+}
+
+data_frame(Predict_M=Predict*100,Predict_J=wyniki$Predict) %>% mutate(roznica=Predict_M-Predict_J) %>% filter(roznica>0) %>% summarise(mean(roznica))
+```

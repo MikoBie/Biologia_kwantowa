@@ -1,21 +1,28 @@
 ---
 title: "Markov nowy algorytm"
 author: "Mikolaj Biesaga"
-date: ""
-output: html_document
+date: ''
+output:
+  html_notebook: default
 ---
-<style>
-body {
-text-align: justify}
-</style>
 
-```{r echo = FALSE, include = FALSE}
+```{r global_options, include = FALSE}
+knitr::opts_chunk$set(
+    echo = FALSE, warning = FALSE, message = FALSE, include = FALSE,fig.width = 7, fig.height = 5, fig.align = "center"
+)
+pdf.options(encoding = "ISOLatin2")
+```
+
+```{r loading_libraries}
 library(gtools)
-library(plyr)
+#library(plyr)
 library(knitr)
 library(readr)
 library(kableExtra)
-
+#library(DiagrammeR)
+library(tidyverse)
+```
+```{r loading_data}
 #przykłady z ludźmi
 
 example_1 <- read_csv("~/Desktop/Psychologia kwantowa/Survey/los_chem_zera_3_3_10_57_34.csv")
@@ -63,254 +70,88 @@ without_heteregonity_new <- without_heteregonity_chart$gap_bin
 
 
 ```
+##
+
+Tak jak rozmawialiśmy w Ann Arbor Ciebie interesowałoby pokazanie stabilności jednego ciągu strzałów neuronów względem drugiego. Pomysł, o którym wtedy rozmawialiśmy opierał się na tym, żeby wziąć odstępy pomiędzy strzałami, zbinować je jakoś i korzystając z metody opartej na ukrytych ciągach Markova porównać je między sobą. Strona techniczna tej meotdy opisana jest na przykładzie poniżej, tutaj chciałbym tylko pokazać mój sposób myślenia. 
+
+Pomysł:
+1) Zbinować czasy pomiędzy strzałami neuronów w obu ciągach.
+2) Przy pomocy metody opartej na ukrytych ciągach Markowa postarać się jak najlepiej przewidzieć każdy z ciągów. Jak najlepiej w tym przypadku oznacza, że wygenerowany przez algorytm ciąg będzie jak najbardziej podobny do oryginalnego.
+3) Sprawdzenie na jakiej podstawie ten algorytm wygenerował najlepszy ciąg. W idealnym świecie w przypadku jednego ciągu byłoby to np. w przypadku jednego ciągu zawsze na podstawie poprzedniego wyrazu, a w przypadku drugiego byłoby to w 25% na podstawie poprzedniego wyrazu, 25% na podstawie dwóch poprzedniech wyrazów, 25% na podstawie trzech poprzednich wyrazów i 25% na podstawie czterech poprzednich wyrazów. Innymi słowy porównanie ze sobą na jakiej podstawie najlepsze przewidywania zostały zrobione.
+3*) Można też porównać ze sobą wyniki dopasowania ciągów wygenerowanych przez algorytm i oryginalnych. Ma to jednak tę wadę, że jest mocno zależne od liczby binów, która powinna być taka sama.
+
 ## Stary algorytm
 
-```{r echo = FALSE, results="asis"}
-index_prep<- function(breaks_example_chart,history){
-  help_data_frame <- data.frame(1:length(breaks_example_chart$gap_bin))
-  for (i in 1:history){
-    length <- c(1:length(breaks_example_chart$gap_bin))
-    temp_data_frame <- (length+1) 
-    help_data_frame <- cbind(help_data_frame,temp_data_frame)
-    temp_vector <- as.vector(t(help_data_frame))
-    temp_markov_series <- breaks_example_chart$gap_bin[temp_vector]
-    temp_markov_series <- as.vector(na.omit(temp_markov_series))
-    return(temp_markov_series)
-  }
-}
+Chcąc przewidzieć ostatni element takiego ciągu <img src="ciag.pdf" alt="some text"> przy klasycznym podejściu policzyłbym po prostu frekwencje jedynek (7) i podzieliłbym na liczbę wszystkich elementów (14). Nic ciekawego by z tego nie wyniknęło bo prawdopodobieństwa zer i jedynek byłyby dalej takie same. Dlatego zamiast zakładać, że pojawienie się w tym ciagu zera albo jedynki jest niezależne od tego jaki był poprzedni wyraz założę, że poprzedni wyraz ma znaczenie (dalej będę to nazywał uwzględnieniem historii jeden). W związku z tym tworzona jest tabela, w której zapisuje wystąpienia tym razem par (patrz poniżej Tabela 1.).
 
-markov <- function(original_markov_series=breaks_example_1_chart,temp_markov_series=index_prep(breaks_example_1_chart,1),history=1){
-  compare <- function(table,vector){
-    (wynik <- t(t(table)==vector))
-    (wynik <- rowSums(wynik))
-    wynik <- wynik>(length(vector)-1)
-    return(wynik)
-  }
-  (number_of_states <- unique(original_markov_series$gap_bin))
-  (transition_matrix <- as.data.frame(cbind(permutations(n=length(number_of_states),r=history+1,v=number_of_states,repeats.allowed=T),prob=0,n=1)))
-  ciag <- 0
-  #nie wszystkie ale przynajmniej 2
-  ciag[c(1:history)] <- sample(sort(number_of_states),history,replace=T,as.vector(table(original_markov_series$gap_bin)/length(original_markov_series$gap_bin)))
-  for (i in (history+1):length(original_markov_series$gap_bin)){
-    (test_for_equality <- transition_matrix[compare(transition_matrix[,c(1:history)],temp_markov_series[(i-history):(i-1)]),])
-    max_row <- test_for_equality$n==max(test_for_equality$n)
-    if ((sum(max_row)>1) && (i!=length(temp_markov_series))){
-      max_row <- test_for_equality$n==max(test_for_equality$n)
-      ciag[i] <- sample(test_for_equality[max_row,history+1],1)
-      add_row <- compare(transition_matrix[,c(1:(history+1))],original_markov_series$gap_bin[(i-history):i])
-      transition_matrix$n[add_row] <- transition_matrix[add_row,history+3]+1
-    } 
-    if (sum(max_row)<2){
-      max_row <- which.max(test_for_equality$n)
-      ciag[i] <- test_for_equality[max_row,history+1]
-      if(i!=length(temp_markov_series)){
-        add_row <- compare(transition_matrix[,c(1:(history+1))],original_markov_series$gap_bin[(i-history):i])
-        transition_matrix$n[add_row] <- transition_matrix$n[add_row]+1
-      }
-    }
-    i <- i+history
-  }
-  
-  wynik <- transition_matrix
-  return(wynik)
-}
+```{r tabela1, include=TRUE}
 
-tabela_1 <- (markov(with_heteregonity_chart,index_prep(with_heteregonity_chart,1),1))
-tabela_2 <- (markov(with_heteregonity_chart,index_prep(with_heteregonity_chart,2),2))
-```
-Zasadniczo mój początkowy pomysł był taki, żeby dla każdej historii stworzyć oddzielną macierz (przykładowe macierze w Tabeli 1. i 2.). Czyli jeśli chcę przewidzieć ciąg na podstawie historii jeden i dwa to wtedy muszę stworzyć dwie macierze, z których najpierw porównuje odpowiednio poprzedni wyraz ciągu lub dwa poprzednie wyrazy z pierwszą lub pierwszymi dwoma kolumnami poniższych tabeli. To znaczy dla ciągu c(2,2,3,2) do przewidzenia trzeciego wyrazu stworzyłbym dwie mniejsze tabele składające się każda z pierwszych 10 wierszy przedstawionych poniżej tabeli (pierwszych 10 bo dla Tabeli 1 pierwsze 10 wierszy ma w pierwszej kolumnie 2, a w Tabeli 2. pierwsze 10 wierszy w dwóch pierwszych kolumnach ma 2 i 2). Następnie w takich tabelach z 10 wierszami policzyłbym prawdopodobieństwo każdego wiersza i wybrał odpowiednio z kolumny V2 dla historii 1 i V3 dla historii 2 wyrazy z największym prawdopodobieństwem. Potem stworzyłbym małą tabelę z dwoma wierszami i trzema komunami, w pierwszej zapisana byłaby długość historii, w drugiej prawdopodobieństwo, a w trzeciej przewidywany wyraz dla odpowiednio historii jeden i dwa.
-```{r echo = FALSE, results="asis"}
-kable(tabela_1,format="html",caption="Tabela 1. Macierz dla historii jeden")%>%kable_styling(bootstrap_options="bordered",full_width=T,position="center")%>%scroll_box(height="500px")
+h1 <- c(0,0,1,1)
+q <- c(0,1,0,1)
+n <- c(2,5,4,2)
 
-kable(tabela_2,format="html",caption="Tabela 2. Macierz dla historii dwa")%>%kable_styling(bootstrap_options="bordered",full_width=T,position="center")%>%scroll_box(height="500px")
-
-
-
+data_frame(h1,q,n) %>%
+  kable("html",caption="Tabela 1. Macierz dla historii jeden") %>%
+  kable_styling("bordered", full_width = FALSE, position="center") %>%
+  column_spec(c(1:3), width="5.5em")
 ```
 
+Widać z niej, że skoro ostatnim elementem przed tym, który chcę zgadnąć jest jedynka to z prawdopodobieństwem $\frac{2}{3}$ kolejnym będzie zero. Jest to wyższe prawdopodobieństwo niż to uzyskane przy założeniu, że zdarzenia są niezależne.
 
-  
-```{r echo=F}
-#Ta funkcja bierze jako argumenty ciąg oraz długość historii, a zwraca indeksy potrzebne do następnej funkcji. Tzn. bierze ciąg powiedzmy c(0,2,4,5) oraz historię 2 i zwraca ciąg indeksów c(1,2,3,2,3,4)
-index_prep<- function(breaks_example_chart,history){
-  help_data_frame <- data.frame(1:length(breaks_example_chart$gap_bin))
-  for (i in 1:history){
-    length <- c(1:length(breaks_example_chart$gap_bin))
-    temp_data_frame <- (length+1) 
-    help_data_frame <- cbind(help_data_frame,temp_data_frame)
-    temp_vector <- as.vector(t(help_data_frame))
-    temp_markov_series <- breaks_example_chart$gap_bin[temp_vector]
-    temp_markov_series <- as.vector(na.omit(temp_markov_series))
-    return(temp_markov_series)
-  }
-}
+Algorytm, którego używam porównuje między sobą prawdopodobieństwa uzyskane przy założeniu niezależności oraz historii od jednego do pięciu. Wybiera najwyższe i na jego podstawie przewiduje kolejny element. Jest to algorytm uczący się, bo przy każdym kolejnym elemencie ta tabela się aktualizuje. Innymi słowy na podstawie takiej tabeli jak ta poniżej wybierane jest najwyższe prawdopodobieństwo, a co za tym idzie kolejny element ciągu (akurat ta tabela jest dla historii jeden i dwa, ale dla dłuższych historii będzie wyglądać analogicznie).
 
-#ta funkcja w swojej podstawowej wersji zwraca przewidywany ciąg. Jako argumenty bierze ciąg, wynik poprzedniej funkcji oraz długość historii.
-markov <- function(original_markov_series=breaks_example_1_chart,temp_markov_series=index_prep(breaks_example_1_chart,1),history=1){
-  #krótka ale bardzo ważna funkcja, która służy do porównywania wierszy tabeli z wektorem.
-  compare <- function(table,vector){
-    (wynik <- t(t(table)==vector))
-    (wynik <- rowSums(wynik))
-    wynik <- wynik>(length(vector)-1)
-    return(wynik)
-  }
-  #zapisanie wszystkich możliwych stanów, w naszym przypadku odległości pomiędzy spike'ami
-  (number_of_states <- unique(original_markov_series$gap_bin))
-  #stworzenie macierzy, w której zapisane są wszystkie możliwe stanów (w zależnośic od historii) oraz liczba wystąpień poszczególnych stnaów w ciągu. Ta macierz z każdym kolejnym krokiem się aktualizuje. Jest podstawą tabeli 1.
-  (transition_matrix <- as.data.frame(cbind(permutations(n=length(number_of_states),r=history+1,v=number_of_states,repeats.allowed=T),prob=0,n=1)))
-  #losowanie pierwszych elementów ciągu, nawet dla historii 1 trzeba przynajmniej pierwsze dwa wylosować bo nie ma danych, żeby je przewidzieć nawet jeśli ciąg składa się tylko z tych samych elementów.
-  ciag <- 0
-  ciag[c(1:history)] <- sample(sort(number_of_states),history,replace=T,as.vector(table(original_markov_series$gap_bin)/length(original_markov_series$gap_bin)))
-  for (i in (history+1):length(original_markov_series$gap_bin)){
-    #to jest moment, w którym w macierzy wszystkich możliwych stanów szukam takiego ciągu, który jest zgodny z analizowanym przeze mnie kawałkiem ciągu. Tzn. dla historii 1 i ciągu c(1,2,1,4) do przewidzenia trzeciego elementu biorę drugi element i sprawdzam co najczęściej po nim występowało. Widać, że nie było jeszcze takiego, więc dla ciągu c(1,2,1,4), z równym prawdopodobieństwem będzie to 1,2 lub 4.
-    (test_for_equality <- transition_matrix[compare(transition_matrix[,c(1:history)],temp_markov_series[(i-history):(i-1)]),])
-    #poniższy kod służy do uporania się z problemem, który pojawia sie gdy jest takie samo prawdopodobieństwo oraz dodaniem w odpowiednim miejscu jedynki do liczebności
-    max_row <- test_for_equality$n==max(test_for_equality$n)
-    if ((sum(max_row)>1) && (i!=length(temp_markov_series))){
-      max_row <- test_for_equality$n==max(test_for_equality$n)
-      ciag[i] <- sample(test_for_equality[max_row,history+1],1)
-      add_row <- compare(transition_matrix[,c(1:(history+1))],original_markov_series$gap_bin[(i-history):i])
-      transition_matrix$n[add_row] <- transition_matrix[add_row,history+3]+1
-    } 
-    if (sum(max_row)<2){
-      max_row <- which.max(test_for_equality$n)
-      ciag[i] <- test_for_equality[max_row,history+1]
-      if(i!=length(temp_markov_series)){
-        add_row <- compare(transition_matrix[,c(1:(history+1))],original_markov_series$gap_bin[(i-history):i])
-        transition_matrix$n[add_row] <- transition_matrix$n[add_row]+1
-      }
-    }
-    i <- i+history
-  }
-  wynik <- ciag
-  #wynik <- sum(ciag[1:(length(ciag))]==original_markov_series$gap_bin[1:length(original_markov_series$gap_bin)])/(length(ciag))
-  return(wynik)
-}
+```{r tabela2, include=TRUE}
+h2 <- c("-","-",0,0) 
+h1 <- c(1,1,1,1)
+q <- c(0,1,0,1)
+n <- c(4,2,2,2)
+p <- c(2/3,1/3,1/2,1/2) %>% round(2)
+
+data_frame(h2,h1,q,n,p) %>%
+  kable("html",caption="Tabela 2. Macierz na podstawie historii jeden i dwa") %>%
+  kable_styling("bordered", full_width = FALSE, position="center") %>%
+  column_spec(c(1:5), width="5.5em")
 ```
-
 
 ## Nowy algorytm
 
-Tworząc ten algorytm zmodyfikowałem pomysł tworzenia dla każdej historii macierzy. Dla wszystkich historii stworzyłem jedną macierz (Tabela 3.). Pierwsza część tej tabeli to wszystkie kombinacje elementów ciągu, a druga to zliczenie występowania ostatniego elementu.  W praktyce wygląda to tak, że gdy chcę przewidywać na podstawie historii jeden i dwa dla ciągu np. c(2,2,3,2) gdy chcę przewidzieć 4 wyraz w pierwszej kolejności dodaje 1 do kolumny 3 we wszystkich wierszach, które w pierwszej kolumnie mają 2. Następnie biorę wszystkie wiersze, które w pierwszej kolumnie mają 3 i liczę prawdopodobieństwo dla kolumn (tzn. dla kolumn z cyframi w nazwach) i wybieram tę, która ma najwyższe - to jest prawdopodobieństwo dla historii jeden. Żeby policzyć prawdopodobieństwo dla historii 2 w kolumnie 3 dodaję jedynkę tylko w tych wierszach, w których w pierwszych dwóch kolumnach są dwie dwójki. Potem oczywiście na podstawie prawdopodobieństwa wybieram najbardziej prawdopodobną kolumnę z wierszy zaczynających się od 2 i 3. Na samym końcu po prostu porównuje te prawdopodobieństwa ze sobą i wybieram wyraz, który jest najbardziej prawdopodobny oraz zapisuje historię na podstawie, której został wybrany.  
+Nowy algorytm jeśli chodzi o założenia jest bliźniaczo podobny do starego. Różnica pojawia się w momencie, w którym porównywane są ze sobą prawdopodobieństwa, a więc wybierana jest odpowiednia historia na podstawie, której dokonywane są przewidywania. Poprzednio dla każdej historii tworzona była oddzielna tabela prawdopodobieństwa. Wybierane były dwa wiersze i porównywane były prawdopodbieństwa między nimi. Wiersz z największym prawdopodobieństwem wybierany był jako ten na podstawie, którego przewidywany był kolejny element ciągu. Teraz ten proces wygląda inaczej ponieważ dla  każdej dłuższej historii uwzględniane są też wszystkie krótsze. Innymi słowy zamiast tworzyć jedną macierz dla każdej historii odzielnie tworzona jest jedna macierz dla wszystkich historii. Poniżej jest przykład dla historii dwa dla tego samego ciągu co w przypadku starego algorytmu <img src="ciag.pdf" alt="some text">.
 
-```{r echo = FALSE}
-#ta funkcja bierze jako argument ciąg i zwraca przewidywany ciąg oraz historię, której przewidywała poszczególne elementy.
-Markov_new <- function(example){
-  #niestety historię w tej funkcji trzeba regulować ręcznie poprzez zmianę liczby poniżej oraz dodanie linijek kodu w pętli for. Na razie ustawiona jest historia 5 ale zmiana tego to jakieś 30 sekund roboty.
-  history <- 2
-  #ta sama krótka funkcja co w poprzednim algorytmie służąca do porównywania wierszy macierzy z wektorem.
-  compare <- function(table,vector){
-    (wynik <- t(t(table)==vector))
-    (wynik <- rowSums(wynik))
-    wynik <- wynik>(length(vector)-1)
-    return(wynik)
-  }
-  #stworzenie macierzy wszystkich stanów dla wszystkich historii. To jest zasadnicza różnica pomiędzy tym algorytmem i tym poprzednim. Ta macierz tworzona jest przez połączenie tak naprawdę dwóch macierzy. Z jednej strony macierzy kombinacji wszystkich stanów dla historii 5 (tylko dlatego, że tak ustawiona jest historia), a z drugiej strony kolumn z liczebnością przewidywanego wyrazu (Tabela 2 pokazuję tę macierz).
-  transition_matrix <- permutations(n=length(unique(example)),r=history,v=unique(example),repeats.allowed = T)
-  #nazwanie kolumn
-  colnames(transition_matrix) <- paste0("h",c(1:history))
-  temp_table <- data.frame(t(rep(0,length(unique(example)))))
-  colnames(temp_table) <- sort(unique(example))
-  #połączenie dwóch tabel
-  transition_matrix <- cbind(transition_matrix,temp_table)
-  #Zmienna, w której będzie zapisywana historia, za pomocą, której robione są przewidywania. Jej pierwsze dwa elementy to zera ponieważ pierwsze dwa elementy są przewidywane na podstawie zwykłego prawdopodobieństwa.
-  which_history <- c(0,0)
-  #zmienna, w której zapisywane są elementy ciągu. Pierwszy element jest po prostu losowany z równym prawdopodobieństwem. Dla dwóch elementów jest to 0.5. Drugi element jest po prostu przepisaniem pierwszego wyrazu oryginalnego ciągu bo na podstawie jednego wyrazu tylko takie przewidywanie można zrobić (w tym sensie trochę oszukuję z historią)
-  ciag <- sample(unique(example),1,replace=F)
-  ciag[2] <- example[1]
-  #to jest serce tej funkcji, tego algorytmu. Podzielone jest na odpowiednie historie. Dla każdej historii. Wydaje mi się, że w miarę jasno opisane jest działanie tego algorytmu powyżej.
-  for (i in 3:(length(example))){
-    #historia 1
-    transition_matrix[compare(transition_matrix[,1],example[i-2]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]] <- transition_matrix[compare(transition_matrix[,1],example[i-2]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]]+1
-    temp_table <- (t(apply(transition_matrix[compare(transition_matrix[,1],example[i-1]),c((history+1):(dim(transition_matrix)[2]))],2,sum)))
-    probability_matrix <- temp_table/sum(temp_table)
-    if (sum(temp_table)<1){
-      probability_matrix[1,] <- 1/length(unique(example))
-    }
-    next_element <- colnames(probability_matrix)[which.max(probability_matrix)]
-    next_element_probability <- max(probability_matrix)
-    if (sum(probability_matrix[1,]==next_element_probability)>1){
-      next_element <- sample(colnames(probability_matrix)[probability_matrix[1,]==next_element_probability],1,replace = F)
-    }
-    #to jest ciągle aktualizująca się tabela, w której zapisywany jest przewidywany następny wyraz, jego prawdopodobieństwo oraz długość historii na podstawie, której został przewidziany. Po uaktualnieniu każdej historii jest 
-    comparison_data_frame <- data.frame(next_element,next_element_probability)
-    #historia 2
-    if (i > 3){
-      transition_matrix[compare(transition_matrix[,c(1:2)],example[c((i-3),(i-2))]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]] <- transition_matrix[compare(transition_matrix[,c(1:2)],example[c((i-3),(i-2))]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]]+1
-      temp_table <- (t(apply(transition_matrix[compare(transition_matrix[,c(1:2)],example[c((i-2):(i-1))]),c((history+1):(dim(transition_matrix)[2]))],2,sum)))
-      probability_matrix <- temp_table/sum(temp_table)
-      if (sum(temp_table)<1){
-        probability_matrix[1,] <- 1/length(unique(example))
-      }
-      next_element <- colnames(probability_matrix)[which.max(probability_matrix)]
-      next_element_probability <- max(probability_matrix)
-      if (sum(probability_matrix[1,]==next_element_probability)>1){
-        next_element <- sample(colnames(probability_matrix)[probability_matrix[1,]==next_element_probability],1,replace = F)
-      }
-      comparison_data_frame <- rbind(comparison_data_frame,data.frame(next_element,next_element_probability))
-    }
-    # #historia 3
-    # if (i > 4){
-    #   transition_matrix[compare(transition_matrix[,c(1:3)],example[c((i-4):(i-2))]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]] <- transition_matrix[compare(transition_matrix[,c(1:3)],example[c((i-4):(i-2))]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]]+1
-    #   temp_table <- (t(apply(transition_matrix[compare(transition_matrix[,c(1:3)],example[c((i-3):(i-1))]),c((history+1):(dim(transition_matrix)[2]))],2,sum)))
-    #   probability_matrix <- temp_table/sum(temp_table)
-    #   if (sum(temp_table)<1){
-    #     probability_matrix[1,] <- 1/length(unique(example))
-    #   }
-    #   next_element <- colnames(probability_matrix)[which.max(probability_matrix)]
-    #   next_element_probability <- max(probability_matrix)
-    #   if (sum(probability_matrix[1,]==next_element_probability)>1){
-    #     next_element <- sample(colnames(probability_matrix)[probability_matrix[1,]==next_element_probability],1,replace = F)
-    #   }
-    #   comparison_data_frame <- rbind(comparison_data_frame,data.frame(next_element,next_element_probability))
-    # }
-    # #historia 4
-    # if (i > 5){
-    #   transition_matrix[compare(transition_matrix[,c(1:4)],example[c((i-5):(i-2))]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]] <- transition_matrix[compare(transition_matrix[,c(1:4)],example[c((i-5):(i-2))]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]]+1
-    #   temp_table <- (t(apply(transition_matrix[compare(transition_matrix[,c(1:4)],example[c((i-4):(i-1))]),c((history+1):(dim(transition_matrix)[2]))],2,sum)))
-    #   probability_matrix <- temp_table/sum(temp_table)
-    #   if (sum(temp_table)<1){
-    #     probability_matrix[1,] <- 1/length(unique(example))
-    #   }
-    #   next_element <- colnames(probability_matrix)[which.max(probability_matrix)]
-    #   next_element_probability <- max(probability_matrix)
-    #   if (sum(probability_matrix[1,]==next_element_probability)>1){
-    #     next_element <- sample(colnames(probability_matrix)[probability_matrix[1,]==next_element_probability],1,replace = F)
-    #   }
-    #   comparison_data_frame <- rbind(comparison_data_frame,data.frame(next_element,next_element_probability))
-    # }
-    # #historia 5
-    # if (i > 6){
-    #   transition_matrix[compare(transition_matrix[,c(1:5)],example[c((i-6):(i-2))]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]] <- transition_matrix[compare(transition_matrix[,c(1:5)],example[c((i-6):(i-2))]),colnames(transition_matrix)[(colnames(transition_matrix)==example[i-1])]]+1
-    #   temp_table <- (t(apply(transition_matrix[compare(transition_matrix[,c(1:5)],example[c((i-5):(i-1))]),c((history+1):(dim(transition_matrix)[2]))],2,sum)))
-    #   probability_matrix <- temp_table/sum(temp_table)
-    #   if (sum(temp_table)<1){
-    #     probability_matrix[1,] <- 1/length(unique(example))
-    #   }
-    #   next_element <- colnames(probability_matrix)[which.max(probability_matrix)]
-    #   next_element_probability <- max(probability_matrix)
-    #   if (sum(probability_matrix[1,]==next_element_probability)>1){
-    #     next_element <- sample(colnames(probability_matrix)[probability_matrix[1,]==next_element_probability],1,replace = F)
-    #   }
-    #   comparison_data_frame <- rbind(comparison_data_frame,data.frame(next_element,next_element_probability))
-    # }
-    #zapisanie historii, która zostanie wybrana do przewidzenia  
-    which_history[i] <- which.max(comparison_data_frame$next_element_probability)
-    #zapisanie kolejnego przewidzianego elementu.
-    ciag[i] <- as.numeric(as.character(comparison_data_frame$next_element[which_history[i]]))
-  }
-  return(list(which_history,ciag,transition_matrix))
-}
-```
-```{r echo=FALSE}
-tabela_3 <- Markov_new(with_heteregonity_new)[[3]]
-kable(tabela_3,format="html",caption="Tabela 3. Macierz dla historii dwa")%>%kable_styling(bootstrap_options="bordered",full_width=T,position="center")%>%scroll_box(height="500px")
-```
+Wiedząc, że będę uwzględniał historię do dwóch tworzę następującą tabelę. W kolumnach "1" i "0" zapisywane są częstości wystąpienia ciągów `h2,h1,1` oraz `h2,h1,0`. W pierwszym kroku zapisywane są frekwencje dla historii jeden (porównaj Tabela 3). Na jej podstawie można policzyć, że prawdopodobieństwo wystąpienia zera po jedynce wynosi $p(0)=\frac{4+4}{2+4+2+4}=\frac{2}{3}$, czyli dokładnie tyle samo co w przypadku starego algorytmu. W kojenym kroku do tej tabeli dodawane są frekwencje dla historii dwa (porównaj Tabela 4). Z niej wynika, że dla historii jeden prawdopodobieństwo wystąpienia zera po jedynce wynosi $p(0)=\frac{4+2+4+2}{2+0+4+2+2+2+4+2}=\frac{1}{2}$, a dla historii dwa $p(0)=\frac{4+2}{4+2+2+2}=\frac{6}{10}$.
 
+<div class="col2">
+```{r tabela3, include=TRUE}
+knitr::include_graphics("tabela4_2.pdf")
+h2 <- c(0,0,1,1) 
+h1 <- c(0,1,0,1)
+jeden <- c(5,2,5,2)
+zero <- c(2,4,2,4)
+
+data_frame(h2,h1,jeden,zero) %>%
+  rename("0"=zero,
+         "1"=jeden) %>%
+  kable("html",caption="Tabela 3. Macierz częstości dla historii jeden",output=FALSE) %>%
+  kable_styling("bordered", full_width = FALSE, position="center") %>%
+  column_spec(c(1:4), width="6em") %>%
+  column_spec(1,italic=TRUE)
+
+h2 <- c(0,0,1,1) 
+h1 <- c(0,1,0,1)
+jeden <- c("5+2","2+2","5+2","2+0")
+zero <- c("2+0","4+2","2+2","4+2")
+data_frame(h2,h1,jeden,zero) %>%
+  rename("0"=zero,
+         "1"=jeden) %>%
+  kable("html",caption="Tabela 4. Macierz częstości dla historii jeden i dwa",output=FALSE) %>%
+  kable_styling("bordered", full_width = FALSE, position="center") %>%
+  column_spec(c(1:4), width="6em")
+
+```
+</div>
 
 ## Wnioski z obu algorytmów
 
-Ogólnie dzięki temu, że trochę podłubałem w tych algorytmach to zorientowałem się, że zwiększenie historii czasem powoduje, że będziemy gorzej przewidywać, a nie lepiej, tzn. tak jak mówiłem na samym początku ten algorytm, który my wykorzystujemy do przewidywania ludzi (dzięki temu, że trochę teraz podłubałem w tym to napisałem lepszy - lepiej przewidujący ludzi) brał całkowicie arbitralnie historię 1, 3 i 5. Dzięki tak dobranej historii następujący ciąg był w stanie przewidzieć z prawdopodobieństwem 0.701342, jednak biorąc po uwagę tylko historię jeden prawdopodobieństwo rośnie do 0.7147651 (trochę jeszcze z niezrozumiałych dla mnie powodów jeśli użyję tego nowego algorytmu i będę się opierał tylko na historii jeden ale niejako brał pod uwagę historię do 5 to wtedy prawdopodobieństwo spada o kilka dziesiątych procenta).  
+Ogólnie dzięki temu, że trochę podłubałem w tych algorytmach to zorientowałem się, że zwiększenie historii czasem powoduje, że będziemy gorzej przewidywać, a nie lepiej, tzn. tak jak mówiłem na samym początku ten algorytm, który my wykorzystujemy do przewidywania ludzi (dzięki temu, że trochę teraz podłubałem w tym to napisałem lepszy - lepiej przewidujący ludzi) brał całkowicie arbitralnie historię 1, 3 i 5. Dzięki tak dobranej historii następujący ciąg był w stanie przewidzieć z prawdopodobieństwem 0.701342, jednak biorąc po uwagę tylko historię jeden prawdopodobieństwo rośnie do 0.7147651.  
 `r (example_1_new)`   
 
 
@@ -344,7 +185,7 @@ Nowy algorytm|1,3,4,5|0.3857143|**0.1625**
 Nowy algorytm|1,2,3,5|0.4428571|0.1375
 Nowy algorytm|1,2,4,5|0.45|0.1
 
-Jedno co na pewno widać na podstawie powyższej tabeli, że zgodnie z oczekiwaniami długość historii wpływa na przewidywanie, tzn. w przypadku ciągu z heteregonity dodanie historii 5 obniża prawdopodobieństwo przewidzenia ciągu. Dzieje się tak ponieważ algorytmowi wydaje się, że znalazł wzór przy historii 5, a tak naprawdę był to przypadek. W przypadku without heteregonity widać, że tak naprawdę do przewidzenia jest potrzebna historia 1 i 3. Historia 4 i 5 nie pomaga ale też nie przeszkadza, za to historia 2 już przeszkadza. Oczywiście powyżej przedstawiona tabela nie zawiera wszystkich możliwych kombinacji bo projektując mój algorytm nie wpadłem na to, że to będzie miało takie znaczenie. Myślałem, że najwyższe prawdopodobieństwo wskażę najlepszy z punktu widzenia globalnego wyraz. Okazało się to nie prawdą więc historię musiałem wymuszać niejako ręcznie. Wybrałem najciekawsze według mnie kombinacje (zawsze uwzględniałem historię jeden bo nie uwzględnienie jej zwiększa element losowy). Dużą wadą ogólnie tych metod jest to, że zawsze będzie w nich jakiś element losowy, tzn. zawsze znajdzie się wyraz (przynajmniej jeden), który będzie trzeba wylosować bo prawdopodobieństwo wielu binów będzie takie samo. Dlatego powyższe wartości mogą się wahać +/- 0.02, raczej nie więcej bo góra dwa, trzy wyrazy były losowane. Oczywiście rozwiązaniem jest policzenie wartości oczekiwanej na podstawie powiedzmy 100 czy 1000 prób, ale to mimo tego, że ten algorytm jest całkiem szybki to trochę to potrwa. Poza tym w tym momencie taka dokładność nie byłą mi potrzebna zwłaszcza przy nierównej liczbie binów.
+Jedno co na pewno widać na podstawie powyższej tabeli, że zgodnie z oczekiwaniami długość historii wpływa na przewidywanie, tzn. w przypadku ciągu z heteregonity dodanie historii 5 obniża prawdopodobieństwo przewidzenia ciągu. Dzieje się tak ponieważ algorytmowi wydaje się, że znalazł wzór przy historii 5, a tak naprawdę był to przypadek. W przypadku without heteregonity widać, że tak naprawdę do przewidzenia jest potrzebna historia 1 i 3. Historia 4 i 5 nie pomaga ale też nie przeszkadza, za to historia 2 już przeszkadza. Oczywiście powyżej przedstawiona tabela nie zawiera wszystkich możliwych kombinacji bo projektując mój algorytm nie wpadłem na to, że to będzie miało takie znaczenie. Myślałem, że najwyższe prawdopodobieństwo wskażę najlepszy z punktu widzenia globalnego wyraz. Okazało się to nieprawdą więc historię musiałem wymuszać niejako ręcznie. Wybrałem najciekawsze według mnie kombinacje (zawsze uwzględniałem historię jeden bo nie uwzględnienie jej zwiększa element losowy). Dużą wadą ogólnie tych metod jest to, że zawsze będzie w nich jakiś element losowy, tzn. zawsze znajdzie się wyraz (przynajmniej jeden), który będzie trzeba wylosować bo prawdopodobieństwo wielu binów będzie takie samo. Dlatego powyższe wartości mogą się wahać +/- 0.02, raczej nie więcej bo góra dwa, trzy wyrazy były losowane. Oczywiście rozwiązaniem jest policzenie wartości oczekiwanej na podstawie powiedzmy 100 czy 1000 prób, ale to mimo tego, że ten algorytm jest całkiem szybki to trochę to potrwa. Poza tym w tym momencie taka dokładność nie byłą mi potrzebna zwłaszcza przy nierównej liczbie binów.
 
 ## Ujednolicenie liczby binów
 
@@ -499,6 +340,50 @@ Ciekawi mnie teraz jak ten algorytm będzie się zachowywał jeśli wysłałbyś
 # sum(list_without_heteregonity_only_h1245[[2]]==without_heteregonity_new)/80
 ```
 
+<!-- CSS styling -->
+<style>
+    html {
+        height: 100%;
+        font-size: 62.5%;
+    }
+    body {
+        height: 100%;
+        font-size: 1.6em;
+        text-align: justify;
+        font-family: "Trebuchet MS", "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", sans-serif;
+    }
+    h1, h2, h3 {
+        text-align: center;
+    }
+    h4.author, h4.date {
+        margin: 0.75em 0 0 0;
+        text-align: center;
+    }
+    h2, h3, h4, h5, h6 {
+        margin: 2em 0 1em 0;
+    }
+    div#header {
+        margin: 1em 0 1em 0;
+    }
+    hr {
+        margin: 2em 0 2em 0;
+    }
+    pre {
+        margin-bottom: 2em;
+    }
+</style>
 
+<style>
+  .col2 {
+    columns: 2 200px;         /* number of columns and width in pixels*/
+    -webkit-columns: 2 200px; /* chrome, safari */
+    -moz-columns: 2 200px;    /* firefox */
+  }
+  .col3 {
+    columns: 3 100px;
+    -webkit-columns: 3 100px;
+    -moz-columns: 3 100px;
+  }
+</style>
 
 

@@ -2,7 +2,7 @@
 title: "Markov"
 author: "Mikolaj Biesaga"
 date: "6 08 2017"
-output: html_document
+output: html_notebook
 ---
 
 ```{r setup, include=FALSE}

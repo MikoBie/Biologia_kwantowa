@@ -2,7 +2,7 @@
 #drugi nowy algorytm będzie wtedy gdy będzie można liczyć wymuszać historię z której ma wybierać mimo, że trasnition matrix się aktualizuje, tzn. liczyć ciąg za pomocą historii jeden, mimo że transition matrix jest dla historii 5.
 Markov_new <- function(example){
   #historia, niestety nie jest ją tak łatwo zmienić. Trzeba dodać kolejny if w for.
-  history <- 1
+  history <- 5
   #do porównywania
   compare <- function(table,vector){
     (wynik <- t(t(table)==vector))
@@ -213,8 +213,20 @@ Markov_new <- function(example){
     which_history[i] <- which.max(comparison_data_frame$next_element_probability)
     ciag[i] <- as.numeric(as.character(comparison_data_frame$next_element[which_history[i]]))
   }
-  return(list(which_history,ciag,transition_matrix))
+  return(list(which_history,
+              ciag,
+              transition_matrix,
+              (sum(ciag==example)/length(example))
+              ))
 }
+
+
+Markov_new(example)
+
+
+sum(Markov_new(example)[[2]]==example)
+
+debug(Markov_new)
 
 
 sum(Markov_new(without_heteregonity_new)[[2]]==without_heteregonity_new)/80
